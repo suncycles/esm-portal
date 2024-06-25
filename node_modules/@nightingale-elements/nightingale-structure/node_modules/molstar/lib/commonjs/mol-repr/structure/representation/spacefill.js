@@ -1,0 +1,46 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SpacefillRepresentationProvider = exports.SpacefillRepresentation = exports.getSpacefillParams = exports.SpacefillParams = void 0;
+var tslib_1 = require("tslib");
+var element_sphere_1 = require("../visual/element-sphere");
+var units_representation_1 = require("../units-representation");
+var param_definition_1 = require("../../../mol-util/param-definition");
+var representation_1 = require("../representation");
+var representation_2 = require("../../../mol-repr/representation");
+var base_1 = require("../../../mol-geo/geometry/base");
+var SpacefillVisuals = {
+    'element-sphere': function (ctx, getParams) { return (0, units_representation_1.UnitsRepresentation)('Sphere mesh', ctx, getParams, element_sphere_1.ElementSphereVisual); },
+};
+exports.SpacefillParams = tslib_1.__assign(tslib_1.__assign({}, element_sphere_1.ElementSphereParams), { bumpFrequency: param_definition_1.ParamDefinition.Numeric(1, { min: 0, max: 10, step: 0.1 }, base_1.BaseGeometry.ShadingCategory) });
+var CoarseGrainedSpacefillParams;
+function getSpacefillParams(ctx, structure) {
+    if (structure.isCoarseGrained) {
+        if (!CoarseGrainedSpacefillParams) {
+            CoarseGrainedSpacefillParams = param_definition_1.ParamDefinition.clone(exports.SpacefillParams);
+            CoarseGrainedSpacefillParams.sizeFactor.defaultValue = 2;
+        }
+        return CoarseGrainedSpacefillParams;
+    }
+    return exports.SpacefillParams;
+}
+exports.getSpacefillParams = getSpacefillParams;
+function SpacefillRepresentation(ctx, getParams) {
+    return representation_2.Representation.createMulti('Spacefill', ctx, getParams, representation_1.StructureRepresentationStateBuilder, SpacefillVisuals);
+}
+exports.SpacefillRepresentation = SpacefillRepresentation;
+exports.SpacefillRepresentationProvider = (0, representation_1.StructureRepresentationProvider)({
+    name: 'spacefill',
+    label: 'Spacefill',
+    description: 'Displays atomic/coarse elements as spheres.',
+    factory: SpacefillRepresentation,
+    getParams: getSpacefillParams,
+    defaultValues: param_definition_1.ParamDefinition.getDefaultValues(exports.SpacefillParams),
+    defaultColorTheme: { name: 'element-symbol' },
+    defaultSizeTheme: { name: 'physical' },
+    isApplicable: function (structure) { return structure.elementCount > 0; }
+});

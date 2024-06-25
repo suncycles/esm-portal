@@ -1,0 +1,49 @@
+"use strict";
+/**
+ * Copyright (c) 2020-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createBasic = exports.BasicSchema = void 0;
+var mmcif_1 = require("../../../mol-io/reader/cif/schema/mmcif");
+var db_1 = require("../../../mol-data/db");
+var mmcif_extras_1 = require("../../../mol-io/reader/cif/schema/mmcif-extras");
+var util_1 = require("./util");
+exports.BasicSchema = {
+    entry: mmcif_1.mmCIF_Schema.entry,
+    struct: mmcif_1.mmCIF_Schema.struct,
+    struct_asym: mmcif_1.mmCIF_Schema.struct_asym,
+    ihm_model_list: mmcif_1.mmCIF_Schema.ihm_model_list,
+    ihm_model_group: mmcif_1.mmCIF_Schema.ihm_model_group,
+    ihm_model_group_link: mmcif_1.mmCIF_Schema.ihm_model_group_link,
+    entity: mmcif_1.mmCIF_Schema.entity,
+    entity_poly: mmcif_1.mmCIF_Schema.entity_poly,
+    entity_poly_seq: mmcif_1.mmCIF_Schema.entity_poly_seq,
+    pdbx_entity_branch: mmcif_1.mmCIF_Schema.pdbx_entity_branch,
+    chem_comp: mmcif_extras_1.mmCIF_chemComp_schema,
+    pdbx_chem_comp_identifier: mmcif_1.mmCIF_Schema.pdbx_chem_comp_identifier,
+    atom_site: mmcif_1.mmCIF_Schema.atom_site,
+    ihm_sphere_obj_site: mmcif_1.mmCIF_Schema.ihm_sphere_obj_site,
+    ihm_gaussian_obj_site: mmcif_1.mmCIF_Schema.ihm_gaussian_obj_site,
+    pdbx_unobs_or_zero_occ_residues: mmcif_1.mmCIF_Schema.pdbx_unobs_or_zero_occ_residues,
+    pdbx_molecule: mmcif_1.mmCIF_Schema.pdbx_molecule,
+};
+function createBasic(data, normalize) {
+    if (normalize === void 0) { normalize = false; }
+    var basic = Object.create(null);
+    for (var _i = 0, _a = Object.keys(exports.BasicSchema); _i < _a.length; _i++) {
+        var name_1 = _a[_i];
+        if (name_1 in data) {
+            basic[name_1] = data[name_1];
+        }
+        else {
+            basic[name_1] = db_1.Table.ofUndefinedColumns(exports.BasicSchema[name_1], 0);
+        }
+    }
+    if (normalize) {
+        basic.atom_site = (0, util_1.getNormalizedAtomSite)(basic.atom_site);
+    }
+    return basic;
+}
+exports.createBasic = createBasic;

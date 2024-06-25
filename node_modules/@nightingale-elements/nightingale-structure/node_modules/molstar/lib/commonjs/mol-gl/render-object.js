@@ -1,0 +1,40 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2020 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createRenderable = exports.createRenderObject = exports.getNextMaterialId = void 0;
+var id_factory_1 = require("../mol-util/id-factory");
+var direct_volume_1 = require("./renderable/direct-volume");
+var mesh_1 = require("./renderable/mesh");
+var points_1 = require("./renderable/points");
+var lines_1 = require("./renderable/lines");
+var spheres_1 = require("./renderable/spheres");
+var text_1 = require("./renderable/text");
+var texture_mesh_1 = require("./renderable/texture-mesh");
+var image_1 = require("./renderable/image");
+var cylinders_1 = require("./renderable/cylinders");
+var getNextId = (0, id_factory_1.idFactory)(0, 0x7FFFFFFF);
+exports.getNextMaterialId = (0, id_factory_1.idFactory)(0, 0x7FFFFFFF);
+//
+function createRenderObject(type, values, state, materialId) {
+    return { id: getNextId(), type: type, values: values, state: state, materialId: materialId };
+}
+exports.createRenderObject = createRenderObject;
+function createRenderable(ctx, o, variants) {
+    switch (o.type) {
+        case 'mesh': return (0, mesh_1.MeshRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'points': return (0, points_1.PointsRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'spheres': return (0, spheres_1.SpheresRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'cylinders': return (0, cylinders_1.CylindersRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'text': return (0, text_1.TextRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'lines': return (0, lines_1.LinesRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'direct-volume': return (0, direct_volume_1.DirectVolumeRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'image': return (0, image_1.ImageRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+        case 'texture-mesh': return (0, texture_mesh_1.TextureMeshRenderable)(ctx, o.id, o.values, o.state, o.materialId, variants);
+    }
+    throw new Error('unsupported type');
+}
+exports.createRenderable = createRenderable;

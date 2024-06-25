@@ -1,0 +1,85 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MoleculeTypeColorThemeProvider = exports.MoleculeTypeColorTheme = exports.moleculeTypeColor = exports.getMoleculeTypeColorThemeParams = exports.MoleculeTypeColorThemeParams = exports.MoleculeTypeColors = void 0;
+var color_1 = require("../../mol-util/color");
+var structure_1 = require("../../mol-model/structure");
+var util_1 = require("../../mol-model/structure/util");
+var param_definition_1 = require("../../mol-util/param-definition");
+var legend_1 = require("../../mol-util/legend");
+var color_2 = require("../../mol-util/color/color");
+var params_1 = require("../../mol-util/color/params");
+var categories_1 = require("./categories");
+exports.MoleculeTypeColors = (0, color_1.ColorMap)({
+    water: 0x386cb0,
+    ion: 0xf0027f,
+    protein: 0xbeaed4,
+    RNA: 0xfdc086,
+    DNA: 0xbf5b17,
+    PNA: 0x42A49A,
+    saccharide: 0x7fc97f,
+});
+var DefaultMoleculeTypeColor = (0, color_1.Color)(0xffff99);
+var Description = 'Assigns a color based on the molecule type of a residue.';
+exports.MoleculeTypeColorThemeParams = {
+    saturation: param_definition_1.ParamDefinition.Numeric(0, { min: -6, max: 6, step: 0.1 }),
+    lightness: param_definition_1.ParamDefinition.Numeric(0, { min: -6, max: 6, step: 0.1 }),
+    colors: param_definition_1.ParamDefinition.MappedStatic('default', {
+        'default': param_definition_1.ParamDefinition.EmptyGroup(),
+        'custom': param_definition_1.ParamDefinition.Group((0, params_1.getColorMapParams)(exports.MoleculeTypeColors))
+    })
+};
+function getMoleculeTypeColorThemeParams(ctx) {
+    return exports.MoleculeTypeColorThemeParams; // TODO return copy
+}
+exports.getMoleculeTypeColorThemeParams = getMoleculeTypeColorThemeParams;
+function moleculeTypeColor(colorMap, unit, element) {
+    var moleculeType = (0, util_1.getElementMoleculeType)(unit, element);
+    switch (moleculeType) {
+        case 2 /* MoleculeType.Water */: return colorMap.water;
+        case 3 /* MoleculeType.Ion */: return colorMap.ion;
+        case 5 /* MoleculeType.Protein */: return colorMap.protein;
+        case 6 /* MoleculeType.RNA */: return colorMap.RNA;
+        case 7 /* MoleculeType.DNA */: return colorMap.DNA;
+        case 8 /* MoleculeType.PNA */: return colorMap.PNA;
+        case 9 /* MoleculeType.Saccharide */: return colorMap.saccharide;
+    }
+    return DefaultMoleculeTypeColor;
+}
+exports.moleculeTypeColor = moleculeTypeColor;
+function MoleculeTypeColorTheme(ctx, props) {
+    var colorMap = (0, color_2.getAdjustedColorMap)(props.colors.name === 'default' ? exports.MoleculeTypeColors : props.colors.params, props.saturation, props.lightness);
+    function color(location) {
+        if (structure_1.StructureElement.Location.is(location)) {
+            return moleculeTypeColor(colorMap, location.unit, location.element);
+        }
+        else if (structure_1.Bond.isLocation(location)) {
+            return moleculeTypeColor(colorMap, location.aUnit, location.aUnit.elements[location.aIndex]);
+        }
+        return DefaultMoleculeTypeColor;
+    }
+    return {
+        factory: MoleculeTypeColorTheme,
+        granularity: 'group',
+        color: color,
+        props: props,
+        description: Description,
+        legend: (0, legend_1.TableLegend)(Object.keys(colorMap).map(function (name) {
+            return [name, colorMap[name]];
+        }).concat([['Other/unknown', DefaultMoleculeTypeColor]]))
+    };
+}
+exports.MoleculeTypeColorTheme = MoleculeTypeColorTheme;
+exports.MoleculeTypeColorThemeProvider = {
+    name: 'molecule-type',
+    label: 'Molecule Type',
+    category: categories_1.ColorThemeCategory.Residue,
+    factory: MoleculeTypeColorTheme,
+    getParams: getMoleculeTypeColorThemeParams,
+    defaultValues: param_definition_1.ParamDefinition.getDefaultValues(exports.MoleculeTypeColorThemeParams),
+    isApplicable: function (ctx) { return !!ctx.structure; }
+};

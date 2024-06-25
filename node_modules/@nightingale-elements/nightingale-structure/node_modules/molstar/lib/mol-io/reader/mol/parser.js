@@ -1,0 +1,194 @@
+/**
+ * Copyright (c) 2020-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ * @author Panagiotis Tourlas <panagiot_tourlov@hotmail.com>
+ */
+import { __awaiter, __generator } from "tslib";
+import { Column } from '../../../mol-data/db';
+import { Task } from '../../../mol-task';
+import { TokenColumnProvider as TokenColumn } from '../common/text/column/token';
+import { TokenBuilder, Tokenizer } from '../common/text/tokenizer';
+import { ReaderResult as Result } from '../result';
+/*
+    The atom lines in a .mol file have the following structure:
+
+    xxxxx.xxxxyyyyy.yyyyzzzzz.zzzz aaaddcccssshhhbbbvvvHHHrrriiimmmnnneee
+    ---------------------------------------------------------------------
+
+    Below is a breakdown of each component and its start/end indices:
+
+    xxxxx.xxxx  (X COORDINATE, 1-10)
+    yyyyy.yyyy  (Y COORDINATE, 10-20)
+    zzzzz.zzzz  (Z COORDINATE, 20-30)
+    _           (30 IS EMPTY)
+    aaa         (ATOM SYMBOL, 31-34)
+    dd          (MASS DIFF, 34-36)
+    ccc         (FORMAL CHARGE, 36-39)
+    sss         (ATOM STEREO PARITY, 39-42)
+    hhh         (HYDROGEN COUNT+1, 42-45)
+    bbb         (STEREO CARE BOX, 45-48)
+    vvv         (VALENCE, 48-51)
+    HHH         (H0 DESIGNATOR, 51-54)
+    rrr         (UNUSED, 54-57)
+    iii         (UNUSED, 57-60)
+    mmm         (ATOM-ATOM MAPPING NUMBER, 60-63)
+    nnn         (INVERSION/RETENTION FLAG, 63-66)
+    eee         (EXACT CHANGE FLAG, 66-69)
+*/
+/**
+ * @param key - The value found at the atom block.
+ * @returns The actual formal charge based on the mapping.
+ */
+export function formalChargeMapper(key) {
+    switch (key) {
+        case 7: return -3;
+        case 6: return -2;
+        case 5: return -1;
+        case 0: return 0;
+        case 3: return 1;
+        case 2: return 2;
+        case 1: return 3;
+        case 4: return 0;
+        default:
+            console.error("Value ".concat(key, " is outside the 0-7 range, defaulting to 0."));
+            return 0;
+    }
+}
+export function handleAtoms(tokenizer, count) {
+    var x = TokenBuilder.create(tokenizer.data, count * 2);
+    var y = TokenBuilder.create(tokenizer.data, count * 2);
+    var z = TokenBuilder.create(tokenizer.data, count * 2);
+    var type_symbol = TokenBuilder.create(tokenizer.data, count * 2);
+    var formal_charge = TokenBuilder.create(tokenizer.data, count * 2);
+    for (var i = 0; i < count; ++i) {
+        Tokenizer.markLine(tokenizer);
+        var s = tokenizer.tokenStart, position = tokenizer.position;
+        Tokenizer.trim(tokenizer, s, s + 10);
+        TokenBuilder.addUnchecked(x, tokenizer.tokenStart, tokenizer.tokenEnd);
+        Tokenizer.trim(tokenizer, s + 10, s + 20);
+        TokenBuilder.addUnchecked(y, tokenizer.tokenStart, tokenizer.tokenEnd);
+        Tokenizer.trim(tokenizer, s + 20, s + 30);
+        TokenBuilder.addUnchecked(z, tokenizer.tokenStart, tokenizer.tokenEnd);
+        Tokenizer.trim(tokenizer, s + 31, s + 34);
+        TokenBuilder.addUnchecked(type_symbol, tokenizer.tokenStart, tokenizer.tokenEnd);
+        Tokenizer.trim(tokenizer, s + 36, s + 39);
+        TokenBuilder.addUnchecked(formal_charge, tokenizer.tokenStart, tokenizer.tokenEnd);
+        tokenizer.position = position;
+    }
+    return {
+        count: count,
+        x: TokenColumn(x)(Column.Schema.float),
+        y: TokenColumn(y)(Column.Schema.float),
+        z: TokenColumn(z)(Column.Schema.float),
+        type_symbol: TokenColumn(type_symbol)(Column.Schema.str),
+        formal_charge: TokenColumn(formal_charge)(Column.Schema.int)
+    };
+}
+export function handleBonds(tokenizer, count) {
+    var atomIdxA = TokenBuilder.create(tokenizer.data, count * 2);
+    var atomIdxB = TokenBuilder.create(tokenizer.data, count * 2);
+    var order = TokenBuilder.create(tokenizer.data, count * 2);
+    for (var i = 0; i < count; ++i) {
+        Tokenizer.markLine(tokenizer);
+        var s = tokenizer.tokenStart, position = tokenizer.position;
+        Tokenizer.trim(tokenizer, s, s + 3);
+        TokenBuilder.addUnchecked(atomIdxA, tokenizer.tokenStart, tokenizer.tokenEnd);
+        Tokenizer.trim(tokenizer, s + 3, s + 6);
+        TokenBuilder.addUnchecked(atomIdxB, tokenizer.tokenStart, tokenizer.tokenEnd);
+        Tokenizer.trim(tokenizer, s + 6, s + 9);
+        TokenBuilder.addUnchecked(order, tokenizer.tokenStart, tokenizer.tokenEnd);
+        tokenizer.position = position;
+    }
+    return {
+        count: count,
+        atomIdxA: TokenColumn(atomIdxA)(Column.Schema.int),
+        atomIdxB: TokenColumn(atomIdxB)(Column.Schema.int),
+        order: TokenColumn(order)(Column.Schema.int)
+    };
+}
+export function handleFormalCharges(tokenizer, lineStart, formalCharges) {
+    Tokenizer.trim(tokenizer, lineStart + 6, lineStart + 9);
+    var numOfCharges = parseInt(Tokenizer.getTokenString(tokenizer));
+    for (var i = 0; i < numOfCharges; ++i) {
+        /*
+        M  CHG  3   1  -1   2   0   2  -1
+                |   |   |   |   |
+                |   |   |   |   |__charge2 (etc.)
+                |   |   |   |
+                |   |   |   |__atomIdx2
+                |   |   |
+                |   |   |__charge1
+                |   |
+                |   |__atomIdx1 (cursor at position 12)
+                |
+                |___numOfCharges
+        */
+        var offset = 9 + (i * 8);
+        Tokenizer.trim(tokenizer, lineStart + offset, lineStart + offset + 4);
+        var _atomIdx = Tokenizer.getTokenString(tokenizer);
+        formalCharges.atomIdx.push(+_atomIdx);
+        Tokenizer.trim(tokenizer, lineStart + offset + 4, lineStart + offset + 8);
+        var _charge = Tokenizer.getTokenString(tokenizer);
+        formalCharges.charge.push(+_charge);
+    }
+    /* Once the line is read, move to the next one. */
+    Tokenizer.eatLine(tokenizer);
+}
+/** Call an appropriate handler based on the property type.
+ * (For now it only calls the formal charge handler, additional handlers can
+ * be added for other properties.)
+ */
+export function handlePropertiesBlock(tokenizer) {
+    var _atomIdx = [];
+    var _charge = [];
+    var _formalCharges = { atomIdx: _atomIdx, charge: _charge };
+    while (tokenizer.position < tokenizer.length) {
+        var s = tokenizer.position;
+        Tokenizer.trim(tokenizer, s + 3, s + 6);
+        var propertyType = Tokenizer.getTokenString(tokenizer);
+        if (propertyType === 'END')
+            break;
+        Tokenizer.eatLine(tokenizer);
+        switch (propertyType) {
+            case 'CHG':
+                handleFormalCharges(tokenizer, s, _formalCharges);
+                break;
+            default:
+                break;
+        }
+    }
+    var formalCharges = {
+        atomIdx: Column.ofIntArray(_formalCharges.atomIdx),
+        charge: Column.ofIntArray(_formalCharges.charge)
+    };
+    return formalCharges;
+}
+function parseInternal(data) {
+    var tokenizer = Tokenizer(data);
+    var title = Tokenizer.readLine(tokenizer).trim();
+    var program = Tokenizer.readLine(tokenizer).trim();
+    var comment = Tokenizer.readLine(tokenizer).trim();
+    var counts = Tokenizer.readLine(tokenizer);
+    var atomCount = +counts.substr(0, 3), bondCount = +counts.substr(3, 3);
+    var atoms = handleAtoms(tokenizer, atomCount);
+    var bonds = handleBonds(tokenizer, bondCount);
+    var formalCharges = handlePropertiesBlock(tokenizer);
+    var result = {
+        title: title,
+        program: program,
+        comment: comment,
+        atoms: atoms,
+        bonds: bonds,
+        formalCharges: formalCharges,
+    };
+    return Result.success(result);
+}
+export function parseMol(data) {
+    var _this = this;
+    return Task.create('Parse Mol', function () { return __awaiter(_this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            return [2 /*return*/, parseInternal(data)];
+        });
+    }); });
+}

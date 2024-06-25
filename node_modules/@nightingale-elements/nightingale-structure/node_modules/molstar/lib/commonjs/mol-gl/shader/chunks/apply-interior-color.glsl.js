@@ -1,0 +1,4 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.apply_interior_color = void 0;
+exports.apply_interior_color = "\nif (interior) {\n    if (uInteriorColorFlag) {\n        gl_FragColor.rgb = uInteriorColor;\n    } else {\n        gl_FragColor.rgb *= 1.0 - uInteriorDarkening;\n    }\n\n    #ifdef dTransparentBackfaces_opaque\n        gl_FragColor.a = 1.0;\n    #endif\n}\n";

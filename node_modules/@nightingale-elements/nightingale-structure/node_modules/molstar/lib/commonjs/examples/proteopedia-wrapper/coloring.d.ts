@@ -1,0 +1,50 @@
+/**
+ * Copyright (c) 2019 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+import { Color } from '../../mol-util/color';
+import { ColorTheme, LocationColor } from '../../mol-theme/color';
+import { ParamDefinition as PD } from '../../mol-util/param-definition';
+import { ThemeDataContext } from '../../mol-theme/theme';
+export declare function createProteopediaCustomTheme(colors: number[]): {
+    name: string;
+    label: string;
+    category: string;
+    factory: (ctx: ThemeDataContext, props: PD.Values<{
+        colors: PD.ObjectList<PD.Normalize<{
+            color: Color;
+        }>>;
+    }>) => {
+        readonly granularity: import("../../mol-geo/geometry/color-data").ColorTypeLocation;
+        readonly color: LocationColor;
+    } & {
+        readonly factory: ColorTheme.Factory<{
+            colors: PD.ObjectList<PD.Normalize<{
+                color: Color;
+            }>>;
+        }, import("../../mol-geo/geometry/color-data").ColorTypeLocation>;
+        readonly props: Readonly<PD.Values<{
+            colors: PD.ObjectList<PD.Normalize<{
+                color: Color;
+            }>>;
+        }>>;
+        readonly palette?: Readonly<ColorTheme.Palette> | undefined;
+        readonly preferSmoothing?: boolean | undefined;
+        readonly contextHash?: number | undefined;
+        readonly description?: string | undefined;
+        readonly legend?: Readonly<import("../../mol-util/legend").TableLegend | import("../../mol-util/legend").ScaleLegend> | undefined;
+    };
+    getParams: (ctx: ThemeDataContext) => {
+        colors: PD.ObjectList<PD.Normalize<{
+            color: Color;
+        }>>;
+    };
+    defaultValues: PD.Values<{
+        colors: PD.ObjectList<PD.Normalize<{
+            color: Color;
+        }>>;
+    }>;
+    isApplicable: (ctx: ThemeDataContext) => boolean;
+};

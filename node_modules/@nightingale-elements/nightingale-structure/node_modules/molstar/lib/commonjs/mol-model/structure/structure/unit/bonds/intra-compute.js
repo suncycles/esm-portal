@@ -1,0 +1,252 @@
+"use strict";
+/**
+ * Copyright (c) 2017-2022 Mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.computeIntraUnitBonds = void 0;
+var tslib_1 = require("tslib");
+var data_1 = require("./data");
+var graph_1 = require("../../../../../mol-math/graph");
+var common_1 = require("./common");
+var int_1 = require("../../../../../mol-data/int");
+var bonds_1 = require("../../../model/properties/atomic/bonds");
+var index_pair_1 = require("../../../../../mol-model-formats/structure/property/bonds/index-pair");
+var chem_comp_1 = require("../../../../../mol-model-formats/structure/property/bonds/chem_comp");
+var struct_conn_1 = require("../../../../../mol-model-formats/structure/property/bonds/struct_conn");
+var linear_algebra_1 = require("../../../../../mol-math/linear-algebra");
+var common_2 = require("../../../../../mol-math/linear-algebra/3d/common");
+var model_1 = require("../../../model/model");
+// avoiding namespace lookup improved performance in Chrome (Aug 2020)
+var v3distance = linear_algebra_1.Vec3.distance;
+function getGraph(atomA, atomB, _order, _flags, _key, atomCount, canRemap) {
+    var builder = new graph_1.IntAdjacencyGraph.EdgeBuilder(atomCount, atomA, atomB);
+    var flags = new Uint16Array(builder.slotCount);
+    var order = new Int8Array(builder.slotCount);
+    var key = new Uint32Array(builder.slotCount);
+    for (var i = 0, _i = builder.edgeCount; i < _i; i++) {
+        builder.addNextEdge();
+        builder.assignProperty(flags, _flags[i]);
+        builder.assignProperty(order, _order[i]);
+        builder.assignProperty(key, _key[i]);
+    }
+    return builder.createGraph({ flags: flags, order: order, key: key }, { canRemap: canRemap });
+}
+var tmpDistVecA = (0, linear_algebra_1.Vec3)();
+var tmpDistVecB = (0, linear_algebra_1.Vec3)();
+function getDistance(unit, indexA, indexB) {
+    unit.conformation.position(indexA, tmpDistVecA);
+    unit.conformation.position(indexB, tmpDistVecB);
+    return v3distance(tmpDistVecA, tmpDistVecB);
+}
+var __structConnAdded = new Set();
+function findIndexPairBonds(unit) {
+    var indexPairs = index_pair_1.IndexPairBonds.Provider.get(unit.model);
+    var atoms = unit.elements;
+    var type_symbol = unit.model.atomicHierarchy.atoms.type_symbol;
+    var atomCount = unit.elements.length;
+    var maxDistance = indexPairs.maxDistance;
+    var _a = indexPairs.bonds, offset = _a.offset, b = _a.b, _b = _a.edgeProps, order = _b.order, distance = _b.distance, flag = _b.flag, key = _b.key, operatorA = _b.operatorA, operatorB = _b.operatorB;
+    var sourceIndex = unit.model.atomicHierarchy.atomSourceIndex;
+    var invertedIndex = model_1.Model.getInvertedAtomSourceIndex(unit.model).invertedIndex;
+    var atomA = [];
+    var atomB = [];
+    var flags = [];
+    var orders = [];
+    var keys = [];
+    var opKey = unit.conformation.operator.key;
+    for (var _aI = 0; _aI < atomCount; _aI++) {
+        var aI = atoms[_aI];
+        var aeI = (0, common_1.getElementIdx)(type_symbol.value(aI));
+        var isHa = (0, common_1.isHydrogen)(aeI);
+        var srcA = sourceIndex.value(aI);
+        for (var i = offset[srcA], il = offset[srcA + 1]; i < il; ++i) {
+            var bI = invertedIndex[b[i]];
+            if (aI >= bI)
+                continue;
+            var _bI = int_1.SortedArray.indexOf(unit.elements, bI);
+            if (_bI < 0)
+                continue;
+            var opA = operatorA[i];
+            var opB = operatorB[i];
+            if ((opA >= 0 && opA !== opKey) || (opB >= 0 && opB !== opKey))
+                continue;
+            var beI = (0, common_1.getElementIdx)(type_symbol.value(bI));
+            var d = distance[i];
+            var dist = getDistance(unit, aI, bI);
+            var add = false;
+            if (d >= 0) {
+                add = (0, common_2.equalEps)(dist, d, 0.3);
+            }
+            else if (maxDistance >= 0) {
+                add = dist < maxDistance;
+            }
+            else {
+                var pairingThreshold = (0, common_1.getPairingThreshold)(aeI, beI, (0, common_1.getElementThreshold)(aeI), (0, common_1.getElementThreshold)(beI));
+                add = dist < pairingThreshold;
+                if (isHa && (0, common_1.isHydrogen)(beI)) {
+                    // TODO handle molecular hydrogen
+                    add = false;
+                }
+            }
+            if (add) {
+                atomA[atomA.length] = _aI;
+                atomB[atomB.length] = _bI;
+                orders[orders.length] = order[i];
+                flags[flags.length] = flag[i];
+                keys[keys.length] = key[i];
+            }
+        }
+    }
+    return getGraph(atomA, atomB, orders, flags, keys, atomCount, false);
+}
+function findBonds(unit, props) {
+    var maxRadius = props.maxRadius;
+    var _a = unit.model.atomicConformation, x = _a.x, y = _a.y, z = _a.z;
+    var atomCount = unit.elements.length;
+    var atoms = unit.elements, residueIndex = unit.residueIndex, chainIndex = unit.chainIndex;
+    var _b = unit.model.atomicHierarchy.atoms, type_symbol = _b.type_symbol, label_atom_id = _b.label_atom_id, label_alt_id = _b.label_alt_id, label_comp_id = _b.label_comp_id;
+    var label_seq_id = unit.model.atomicHierarchy.residues.label_seq_id;
+    var index = unit.model.atomicHierarchy.index;
+    var byEntityKey = unit.model.sequence.byEntityKey;
+    var query3d = unit.lookup3d;
+    var structConn = struct_conn_1.StructConn.Provider.get(unit.model);
+    var component = chem_comp_1.ComponentBond.Provider.get(unit.model);
+    var structConnExhaustive = struct_conn_1.StructConn.isExhaustive(unit.model);
+    var atomA = [];
+    var atomB = [];
+    var flags = [];
+    var order = [];
+    var key = [];
+    var lastResidue = -1;
+    var componentMap = void 0;
+    var isWatery = true, isDictionaryBased = true, isSequenced = true;
+    var structConnAdded = __structConnAdded;
+    for (var _aI = 0; _aI < atomCount; _aI++) {
+        var aI = atoms[_aI];
+        var elemA = type_symbol.value(aI);
+        if (isWatery && (elemA !== 'H' && elemA !== 'O'))
+            isWatery = false;
+        var structConnEntries = props.forceCompute ? void 0 : structConn && structConn.byAtomIndex.get(aI);
+        var hasStructConn = false;
+        if (structConnEntries) {
+            for (var _c = 0, structConnEntries_1 = structConnEntries; _c < structConnEntries_1.length; _c++) {
+                var se = structConnEntries_1[_c];
+                var partnerA = se.partnerA, partnerB = se.partnerB;
+                // symmetry must be the same for intra-unit bonds
+                if (partnerA.symmetry !== partnerB.symmetry)
+                    continue;
+                var p = partnerA.atomIndex === aI ? partnerB : partnerA;
+                var _bI = int_1.SortedArray.indexOf(unit.elements, p.atomIndex);
+                if (_bI < 0 || atoms[_bI] < aI)
+                    continue;
+                atomA[atomA.length] = _aI;
+                atomB[atomB.length] = _bI;
+                flags[flags.length] = se.flags;
+                order[order.length] = se.order;
+                key[key.length] = se.rowIndex;
+                if (!hasStructConn)
+                    structConnAdded.clear();
+                hasStructConn = true;
+                structConnAdded.add(_bI);
+            }
+        }
+        if (structConnExhaustive)
+            continue;
+        var raI = residueIndex[aI];
+        var seqIdA = label_seq_id.value(raI);
+        var compId = label_comp_id.value(aI);
+        if (!props.forceCompute && raI !== lastResidue) {
+            if (!!component && component.entries.has(compId)) {
+                var entitySeq = byEntityKey[index.getEntityFromChain(chainIndex[aI])];
+                if (entitySeq && entitySeq.sequence.microHet.has(seqIdA)) {
+                    // compute for sequence positions with micro-heterogeneity
+                    componentMap = void 0;
+                }
+                else {
+                    componentMap = component.entries.get(compId).map;
+                }
+            }
+            else {
+                componentMap = void 0;
+            }
+        }
+        lastResidue = raI;
+        var aeI = (0, common_1.getElementIdx)(elemA);
+        var atomIdA = label_atom_id.value(aI);
+        var componentPairs = componentMap ? componentMap.get(atomIdA) : void 0;
+        var _d = query3d.find(x[aI], y[aI], z[aI], maxRadius), indices = _d.indices, count = _d.count, squaredDistances = _d.squaredDistances;
+        var isHa = (0, common_1.isHydrogen)(aeI);
+        var thresholdA = (0, common_1.getElementThreshold)(aeI);
+        var altA = label_alt_id.value(aI);
+        var metalA = common_1.MetalsSet.has(aeI);
+        for (var ni = 0; ni < count; ni++) {
+            var _bI = indices[ni];
+            if (hasStructConn && structConnAdded.has(_bI))
+                continue;
+            var bI = atoms[_bI];
+            if (bI <= aI)
+                continue;
+            var altB = label_alt_id.value(bI);
+            if (altA && altB && altA !== altB)
+                continue;
+            var beI = (0, common_1.getElementIdx)(type_symbol.value(bI));
+            var isHb = (0, common_1.isHydrogen)(beI);
+            if (isHa && isHb)
+                continue;
+            var isMetal = (metalA || common_1.MetalsSet.has(beI)) && !(isHa || isHb);
+            var rbI = residueIndex[bI];
+            // handle "component dictionary" bonds.
+            if (raI === rbI && componentPairs) {
+                var e = componentPairs.get(label_atom_id.value(bI));
+                if (e) {
+                    atomA[atomA.length] = _aI;
+                    atomB[atomB.length] = _bI;
+                    order[order.length] = e.order;
+                    var flag = e.flags;
+                    if (isMetal) {
+                        if (flag | 1 /* BondType.Flag.Covalent */)
+                            flag ^= 1 /* BondType.Flag.Covalent */;
+                        flag |= 2 /* BondType.Flag.MetallicCoordination */;
+                    }
+                    flags[flags.length] = flag;
+                    key[key.length] = e.key;
+                }
+                continue;
+            }
+            var dist = Math.sqrt(squaredDistances[ni]);
+            if (dist === 0)
+                continue;
+            var pairingThreshold = (0, common_1.getPairingThreshold)(aeI, beI, thresholdA, (0, common_1.getElementThreshold)(beI));
+            if (dist <= pairingThreshold) {
+                atomA[atomA.length] = _aI;
+                atomB[atomB.length] = _bI;
+                order[order.length] = (0, bonds_1.getIntraBondOrderFromTable)(compId, atomIdA, label_atom_id.value(bI));
+                flags[flags.length] = (isMetal ? 2 /* BondType.Flag.MetallicCoordination */ : 1 /* BondType.Flag.Covalent */) | 32 /* BondType.Flag.Computed */;
+                key[key.length] = -1;
+                var seqIdB = label_seq_id.value(rbI);
+                if (seqIdA === seqIdB)
+                    isDictionaryBased = false;
+                if (Math.abs(seqIdA - seqIdB) > 1)
+                    isSequenced = false;
+            }
+        }
+    }
+    var canRemap = isWatery || (isDictionaryBased && isSequenced);
+    return getGraph(atomA, atomB, order, flags, key, atomCount, canRemap);
+}
+function computeIntraUnitBonds(unit, props) {
+    var p = tslib_1.__assign(tslib_1.__assign({}, common_1.DefaultBondComputationProps), props);
+    if (p.noCompute || (model_1.Model.isCoarseGrained(unit.model) && !index_pair_1.IndexPairBonds.Provider.get(unit.model) && !struct_conn_1.StructConn.isExhaustive(unit.model))) {
+        return data_1.IntraUnitBonds.Empty;
+    }
+    if (!p.forceCompute && index_pair_1.IndexPairBonds.Provider.get(unit.model)) {
+        return findIndexPairBonds(unit);
+    }
+    else {
+        return findBonds(unit, p);
+    }
+}
+exports.computeIntraUnitBonds = computeIntraUnitBonds;

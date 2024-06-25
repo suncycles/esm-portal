@@ -1,0 +1,106 @@
+/**
+ * Copyright (c) 2020-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Sebastian Bittrich <sebastian.bittrich@rcsb.org>
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ * @author Jason Pattle <jpattle@exscientia.co.uk>
+ * @author Panagiotis Tourlas <panagiot_tourlov@hotmail.com>
+ */
+import { __awaiter, __generator } from "tslib";
+import { Column } from '../../../mol-data/db';
+import { handleAtoms, handleBonds, handlePropertiesBlock } from '../mol/parser';
+import { Task } from '../../../mol-task';
+import { ReaderResult as Result } from '../result';
+import { Tokenizer, TokenBuilder } from '../common/text/tokenizer';
+import { TokenColumnProvider as TokenColumn } from '../common/text/column/token';
+import { handleAtomsV3, handleBondsV3, handleCountsV3, isV3 } from './parser-v3-util';
+var delimiter = '$$$$';
+function handleDataItems(tokenizer) {
+    var dataHeader = TokenBuilder.create(tokenizer.data, 32);
+    var data = TokenBuilder.create(tokenizer.data, 32);
+    while (tokenizer.position < tokenizer.length) {
+        var line = Tokenizer.readLine(tokenizer);
+        if (line.startsWith(delimiter))
+            break;
+        if (!line)
+            continue;
+        if (line.startsWith('> ')) {
+            TokenBuilder.add(dataHeader, tokenizer.tokenStart + 2, tokenizer.tokenEnd);
+            Tokenizer.markLine(tokenizer);
+            var start = tokenizer.tokenStart;
+            var end = tokenizer.tokenEnd;
+            var added = false;
+            while (tokenizer.position < tokenizer.length) {
+                var line2 = Tokenizer.readLine(tokenizer);
+                if (!line2 || line2.startsWith(delimiter) || line2.startsWith('> ')) {
+                    TokenBuilder.add(data, start, end);
+                    added = true;
+                    break;
+                }
+                end = tokenizer.tokenEnd;
+            }
+            if (!added) {
+                TokenBuilder.add(data, start, end);
+            }
+        }
+    }
+    return {
+        dataHeader: TokenColumn(dataHeader)(Column.Schema.str),
+        data: TokenColumn(data)(Column.Schema.str)
+    };
+}
+function handleCountsV2(countsAndVersion) {
+    return {
+        atomCount: +countsAndVersion.substr(0, 3),
+        bondCount: +countsAndVersion.substr(3, 3)
+    };
+}
+function handleMolFile(tokenizer) {
+    var title = Tokenizer.readLine(tokenizer).trim();
+    var program = Tokenizer.readLine(tokenizer).trim();
+    var comment = Tokenizer.readLine(tokenizer).trim();
+    var countsAndVersion = Tokenizer.readLine(tokenizer);
+    var molIsV3 = isV3(countsAndVersion);
+    var _a = molIsV3 ? handleCountsV3(tokenizer) : handleCountsV2(countsAndVersion), atomCount = _a.atomCount, bondCount = _a.bondCount;
+    if (Number.isNaN(atomCount) || Number.isNaN(bondCount)) {
+        // try to skip to next molecule
+        while (tokenizer.position < tokenizer.length) {
+            var line = Tokenizer.readLine(tokenizer);
+            if (line.startsWith(delimiter))
+                break;
+        }
+        return;
+    }
+    /* No support for formal charge parsing in V3000 molfiles at the moment,
+    so all charges default to 0.*/
+    var nullFormalCharges = {
+        atomIdx: Column.ofConst(0, atomCount, Column.Schema.int),
+        charge: Column.ofConst(0, atomCount, Column.Schema.int)
+    };
+    var atoms = molIsV3 ? handleAtomsV3(tokenizer, atomCount) : handleAtoms(tokenizer, atomCount);
+    var bonds = molIsV3 ? handleBondsV3(tokenizer, bondCount) : handleBonds(tokenizer, bondCount);
+    var formalCharges = molIsV3 ? nullFormalCharges : handlePropertiesBlock(tokenizer);
+    var dataItems = handleDataItems(tokenizer);
+    return {
+        molFile: { title: title, program: program, comment: comment, atoms: atoms, bonds: bonds, formalCharges: formalCharges },
+        dataItems: dataItems
+    };
+}
+function parseInternal(data) {
+    var tokenizer = Tokenizer(data);
+    var compounds = [];
+    while (tokenizer.position < tokenizer.length) {
+        var c = handleMolFile(tokenizer);
+        if (c)
+            compounds.push(c);
+    }
+    return Result.success({ compounds: compounds });
+}
+export function parseSdf(data) {
+    var _this = this;
+    return Task.create('Parse Sdf', function () { return __awaiter(_this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            return [2 /*return*/, parseInternal(data)];
+        });
+    }); });
+}

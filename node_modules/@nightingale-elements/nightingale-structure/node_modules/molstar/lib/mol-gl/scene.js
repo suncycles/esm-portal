@@ -1,0 +1,311 @@
+/**
+ * Copyright (c) 2018-2023 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+import { createRenderable } from './render-object';
+import { Object3D } from './object3d';
+import { Sphere3D } from '../mol-math/geometry/primitives/sphere3d';
+import { CommitQueue } from './commit-queue';
+import { now } from '../mol-util/now';
+import { arraySetRemove } from '../mol-util/array';
+import { BoundaryHelper } from '../mol-math/geometry/boundary-helper';
+import { hash1 } from '../mol-data/util';
+import { GraphicsRenderVariants } from './webgl/render-item';
+import { clamp } from '../mol-math/interpolate';
+var boundaryHelper = new BoundaryHelper('98');
+function calculateBoundingSphere(renderables, boundingSphere, onlyVisible) {
+    boundaryHelper.reset();
+    for (var i = 0, il = renderables.length; i < il; ++i) {
+        if (onlyVisible && !renderables[i].state.visible)
+            continue;
+        var boundingSphere_1 = renderables[i].values.boundingSphere.ref.value;
+        if (!boundingSphere_1.radius)
+            continue;
+        boundaryHelper.includeSphere(boundingSphere_1);
+    }
+    boundaryHelper.finishedIncludeStep();
+    for (var i = 0, il = renderables.length; i < il; ++i) {
+        if (onlyVisible && !renderables[i].state.visible)
+            continue;
+        var boundingSphere_2 = renderables[i].values.boundingSphere.ref.value;
+        if (!boundingSphere_2.radius)
+            continue;
+        boundaryHelper.radiusSphere(boundingSphere_2);
+    }
+    return boundaryHelper.getSphere(boundingSphere);
+}
+function renderableSort(a, b) {
+    var drawProgramIdA = (a.getProgram('colorBlended') || a.getProgram('colorWboit') || a.getProgram('colorDpoit')).id;
+    var drawProgramIdB = (b.getProgram('colorBlended') || b.getProgram('colorWboit') || b.getProgram('colorDpoit')).id;
+    var materialIdA = a.materialId;
+    var materialIdB = b.materialId;
+    if (drawProgramIdA !== drawProgramIdB) {
+        // sort by program id to minimize gl state changes
+        return drawProgramIdA - drawProgramIdB;
+    }
+    else if (materialIdA !== materialIdB) {
+        // sort by material id to minimize gl state changes
+        return materialIdA - materialIdB;
+    }
+    else {
+        return a.id - b.id;
+    }
+}
+var Scene;
+(function (Scene) {
+    function create(ctx, variants) {
+        if (variants === void 0) { variants = GraphicsRenderVariants; }
+        var renderableMap = new Map();
+        var renderables = [];
+        var boundingSphere = Sphere3D();
+        var boundingSphereVisible = Sphere3D();
+        var primitives = [];
+        var volumes = [];
+        var boundingSphereDirty = true;
+        var boundingSphereVisibleDirty = true;
+        var markerAverageDirty = true;
+        var opacityAverageDirty = true;
+        var hasOpaqueDirty = true;
+        var markerAverage = 0;
+        var opacityAverage = 0;
+        var hasOpaque = false;
+        var object3d = Object3D.create();
+        var view = object3d.view, position = object3d.position, direction = object3d.direction, up = object3d.up;
+        function add(o) {
+            if (!renderableMap.has(o)) {
+                var renderable = createRenderable(ctx, o, variants);
+                renderables.push(renderable);
+                if (o.type === 'direct-volume') {
+                    volumes.push(renderable);
+                }
+                else {
+                    primitives.push(renderable);
+                }
+                renderableMap.set(o, renderable);
+                boundingSphereDirty = true;
+                boundingSphereVisibleDirty = true;
+            }
+            else {
+                console.warn("RenderObject with id '".concat(o.id, "' already present"));
+            }
+        }
+        function remove(o) {
+            var renderable = renderableMap.get(o);
+            if (renderable) {
+                renderable.dispose();
+                arraySetRemove(renderables, renderable);
+                arraySetRemove(primitives, renderable);
+                arraySetRemove(volumes, renderable);
+                renderableMap.delete(o);
+                boundingSphereDirty = true;
+                boundingSphereVisibleDirty = true;
+            }
+        }
+        var commitBulkSize = 100;
+        function commit(maxTimeMs) {
+            var start = now();
+            var i = 0;
+            while (true) {
+                var o = commitQueue.tryGetRemove();
+                if (!o)
+                    break;
+                remove(o);
+                if (++i % commitBulkSize === 0 && now() - start > maxTimeMs)
+                    return false;
+            }
+            while (true) {
+                var o = commitQueue.tryGetAdd();
+                if (!o)
+                    break;
+                add(o);
+                if (++i % commitBulkSize === 0 && now() - start > maxTimeMs)
+                    return false;
+            }
+            renderables.sort(renderableSort);
+            markerAverageDirty = true;
+            opacityAverageDirty = true;
+            hasOpaqueDirty = true;
+            return true;
+        }
+        var commitQueue = new CommitQueue();
+        var visibleHash = -1;
+        function computeVisibleHash() {
+            var hash = 23;
+            for (var i = 0, il = renderables.length; i < il; ++i) {
+                if (!renderables[i].state.visible)
+                    continue;
+                hash = (31 * hash + renderables[i].id) | 0;
+            }
+            hash = hash1(hash);
+            if (hash === -1)
+                hash = 0;
+            return hash;
+        }
+        function syncVisibility() {
+            var newVisibleHash = computeVisibleHash();
+            if (newVisibleHash !== visibleHash) {
+                boundingSphereVisibleDirty = true;
+                markerAverageDirty = true;
+                opacityAverageDirty = true;
+                hasOpaqueDirty = true;
+                visibleHash = newVisibleHash;
+                return true;
+            }
+            else {
+                return false;
+            }
+        }
+        function calculateMarkerAverage() {
+            if (primitives.length === 0)
+                return 0;
+            var count = 0;
+            var markerAverage = 0;
+            for (var i = 0, il = primitives.length; i < il; ++i) {
+                if (!primitives[i].state.visible)
+                    continue;
+                markerAverage += primitives[i].values.markerAverage.ref.value;
+                count += 1;
+            }
+            return count > 0 ? markerAverage / count : 0;
+        }
+        function calculateOpacityAverage() {
+            var _a, _b;
+            if (primitives.length === 0)
+                return 0;
+            var count = 0;
+            var opacityAverage = 0;
+            for (var i = 0, il = primitives.length; i < il; ++i) {
+                var p = primitives[i];
+                if (!p.state.visible)
+                    continue;
+                // TODO: simplify, handle in renderable.state???
+                // uAlpha is updated in "render" so we need to recompute it here
+                var alpha = clamp(p.values.alpha.ref.value * p.state.alphaFactor, 0, 1);
+                var xray = ((_a = p.values.dXrayShaded) === null || _a === void 0 ? void 0 : _a.ref.value) ? 0.5 : 1;
+                var fuzzy = ((_b = p.values.dPointStyle) === null || _b === void 0 ? void 0 : _b.ref.value) === 'fuzzy' ? 0.5 : 1;
+                var text = p.values.dGeometryType.ref.value === 'text' ? 0.5 : 1;
+                opacityAverage += (1 - p.values.transparencyAverage.ref.value) * alpha * xray * fuzzy * text;
+                count += 1;
+            }
+            return count > 0 ? opacityAverage / count : 0;
+        }
+        function calculateHasOpaque() {
+            var _a;
+            if (primitives.length === 0)
+                return false;
+            for (var i = 0, il = primitives.length; i < il; ++i) {
+                var p = primitives[i];
+                if (!p.state.visible)
+                    continue;
+                if (p.state.opaque)
+                    return true;
+                if (p.state.alphaFactor === 1 && p.values.alpha.ref.value === 1 && p.values.transparencyAverage.ref.value !== 1)
+                    return true;
+                if (((_a = p.values.dTransparentBackfaces) === null || _a === void 0 ? void 0 : _a.ref.value) === 'opaque')
+                    return true;
+            }
+            return false;
+        }
+        return {
+            view: view,
+            position: position,
+            direction: direction,
+            up: up,
+            renderables: renderables,
+            primitives: { view: view, position: position, direction: direction, up: up, renderables: primitives },
+            volumes: { view: view, position: position, direction: direction, up: up, renderables: volumes },
+            syncVisibility: syncVisibility,
+            update: function (objects, keepBoundingSphere) {
+                var _a;
+                Object3D.update(object3d);
+                if (objects) {
+                    for (var i = 0, il = objects.length; i < il; ++i) {
+                        (_a = renderableMap.get(objects[i])) === null || _a === void 0 ? void 0 : _a.update();
+                    }
+                }
+                else {
+                    for (var i = 0, il = renderables.length; i < il; ++i) {
+                        renderables[i].update();
+                    }
+                }
+                if (!keepBoundingSphere) {
+                    boundingSphereDirty = true;
+                    boundingSphereVisibleDirty = true;
+                }
+                else {
+                    syncVisibility();
+                }
+                markerAverageDirty = true;
+                opacityAverageDirty = true;
+                hasOpaqueDirty = true;
+            },
+            add: function (o) { return commitQueue.add(o); },
+            remove: function (o) { return commitQueue.remove(o); },
+            commit: function (maxTime) {
+                if (maxTime === void 0) { maxTime = Number.MAX_VALUE; }
+                return commit(maxTime);
+            },
+            get commitQueueSize() { return commitQueue.size; },
+            get needsCommit() { return !commitQueue.isEmpty; },
+            has: function (o) {
+                return renderableMap.has(o);
+            },
+            clear: function () {
+                for (var i = 0, il = renderables.length; i < il; ++i) {
+                    renderables[i].dispose();
+                }
+                renderables.length = 0;
+                primitives.length = 0;
+                volumes.length = 0;
+                renderableMap.clear();
+                boundingSphereDirty = true;
+                boundingSphereVisibleDirty = true;
+            },
+            forEach: function (callbackFn) {
+                renderableMap.forEach(callbackFn);
+            },
+            get count() {
+                return renderables.length;
+            },
+            get boundingSphere() {
+                if (boundingSphereDirty) {
+                    calculateBoundingSphere(renderables, boundingSphere, false);
+                    boundingSphereDirty = false;
+                }
+                return boundingSphere;
+            },
+            get boundingSphereVisible() {
+                if (boundingSphereVisibleDirty) {
+                    calculateBoundingSphere(renderables, boundingSphereVisible, true);
+                    boundingSphereVisibleDirty = false;
+                }
+                return boundingSphereVisible;
+            },
+            get markerAverage() {
+                if (markerAverageDirty) {
+                    markerAverage = calculateMarkerAverage();
+                    markerAverageDirty = false;
+                }
+                return markerAverage;
+            },
+            get opacityAverage() {
+                if (opacityAverageDirty) {
+                    opacityAverage = calculateOpacityAverage();
+                    opacityAverageDirty = false;
+                }
+                return opacityAverage;
+            },
+            get hasOpaque() {
+                if (hasOpaqueDirty) {
+                    hasOpaque = calculateHasOpaque();
+                    hasOpaqueDirty = false;
+                }
+                return hasOpaque;
+            },
+        };
+    }
+    Scene.create = create;
+})(Scene || (Scene = {}));
+export { Scene };

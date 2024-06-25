@@ -1,0 +1,114 @@
+"use strict";
+/**
+ * Copyright (c) 2021-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.EntityIdColorThemeProvider = exports.EntityIdColorTheme = exports.getEntityIdColorThemeParams = exports.EntityIdColorThemeParams = void 0;
+const structure_1 = require("../../mol-model/structure");
+const color_1 = require("../../mol-util/color");
+const param_definition_1 = require("../../mol-util/param-definition");
+const palette_1 = require("../../mol-util/color/palette");
+const categories_1 = require("./categories");
+const DefaultList = 'many-distinct';
+const DefaultColor = (0, color_1.Color)(0xFAFAFA);
+const Description = 'Gives every chain a color based on its `label_entity_id` value.';
+exports.EntityIdColorThemeParams = {
+    ...(0, palette_1.getPaletteParams)({ type: 'colors', colorList: DefaultList }),
+};
+function getEntityIdColorThemeParams(ctx) {
+    const params = param_definition_1.ParamDefinition.clone(exports.EntityIdColorThemeParams);
+    return params;
+}
+exports.getEntityIdColorThemeParams = getEntityIdColorThemeParams;
+function key(entityId, modelIndex) {
+    return `${entityId}|${modelIndex}`;
+}
+function getEntityIdSerialMap(structure) {
+    const map = new Map();
+    for (let i = 0, il = structure.models.length; i < il; ++i) {
+        const { label_entity_id } = structure.models[i].atomicHierarchy.chains;
+        for (let j = 0, jl = label_entity_id.rowCount; j < jl; ++j) {
+            const k = key(label_entity_id.value(j), i);
+            if (!map.has(k))
+                map.set(k, map.size);
+        }
+        const { coarseHierarchy } = structure.models[i];
+        if (coarseHierarchy.isDefined) {
+            const { entity_id: spheres_entity_id } = coarseHierarchy.spheres;
+            for (let j = 0, jl = spheres_entity_id.rowCount; j < jl; ++j) {
+                const k = key(spheres_entity_id.value(j), i);
+                if (!map.has(k))
+                    map.set(k, map.size);
+            }
+            const { entity_id: gaussians_entity_id } = coarseHierarchy.gaussians;
+            for (let j = 0, jl = gaussians_entity_id.rowCount; j < jl; ++j) {
+                const k = key(gaussians_entity_id.value(j), i);
+                if (!map.has(k))
+                    map.set(k, map.size);
+            }
+        }
+    }
+    return map;
+}
+function getEntityId(location) {
+    switch (location.unit.kind) {
+        case 0 /* Unit.Kind.Atomic */:
+            return structure_1.StructureProperties.chain.label_entity_id(location);
+        case 1 /* Unit.Kind.Spheres */:
+        case 2 /* Unit.Kind.Gaussians */:
+            return structure_1.StructureProperties.coarse.entity_id(location);
+    }
+}
+function EntityIdColorTheme(ctx, props) {
+    let color;
+    let legend;
+    if (ctx.structure) {
+        const l = structure_1.StructureElement.Location.create(ctx.structure.root);
+        const entityIdSerialMap = getEntityIdSerialMap(ctx.structure.root);
+        const labelTable = Array.from(entityIdSerialMap.keys());
+        const valueLabel = (i) => labelTable[i];
+        const palette = (0, palette_1.getPalette)(entityIdSerialMap.size, props, { valueLabel });
+        legend = palette.legend;
+        color = (location) => {
+            let serial = undefined;
+            if (structure_1.StructureElement.Location.is(location)) {
+                const entityId = getEntityId(location);
+                const modelIndex = location.structure.models.indexOf(location.unit.model);
+                const k = key(entityId, modelIndex);
+                serial = entityIdSerialMap.get(k);
+            }
+            else if (structure_1.Bond.isLocation(location)) {
+                l.unit = location.aUnit;
+                l.element = location.aUnit.elements[location.aIndex];
+                const entityId = getEntityId(l);
+                const modelIndex = l.structure.models.indexOf(l.unit.model);
+                const k = key(entityId, modelIndex);
+                serial = entityIdSerialMap.get(k);
+            }
+            return serial === undefined ? DefaultColor : palette.color(serial);
+        };
+    }
+    else {
+        color = () => DefaultColor;
+    }
+    return {
+        factory: EntityIdColorTheme,
+        granularity: 'group',
+        color,
+        props,
+        description: Description,
+        legend
+    };
+}
+exports.EntityIdColorTheme = EntityIdColorTheme;
+exports.EntityIdColorThemeProvider = {
+    name: 'entity-id',
+    label: 'Entity Id',
+    category: categories_1.ColorThemeCategory.Chain,
+    factory: EntityIdColorTheme,
+    getParams: getEntityIdColorThemeParams,
+    defaultValues: param_definition_1.ParamDefinition.getDefaultValues(exports.EntityIdColorThemeParams),
+    isApplicable: (ctx) => !!ctx.structure
+};

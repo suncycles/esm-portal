@@ -1,0 +1,23 @@
+{
+  "name": "esm-portal",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "keywords": [],
+  "author": "Michael Sun",
+  "license": "ISC",
+  "dependencies": {
+    "@nightingale-elements/nightingale-structure": "^5.0.0",
+    "express": "^4.19.2",
+    "molstar": "^4.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.3"
+  }
+}

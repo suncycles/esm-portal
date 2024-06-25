@@ -1,0 +1,40 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createComputeRenderable = exports.createRenderable = void 0;
+var mol_util_1 = require("../mol-util");
+var id_factory_1 = require("../mol-util/id-factory");
+var interpolate_1 = require("../mol-math/interpolate");
+var getNextRenderableId = (0, id_factory_1.idFactory)();
+function createRenderable(renderItem, values, state) {
+    return {
+        id: getNextRenderableId(),
+        materialId: renderItem.materialId,
+        values: values,
+        state: state,
+        render: function (variant, sharedTexturesCount) {
+            if (values.uAlpha && values.alpha) {
+                mol_util_1.ValueCell.updateIfChanged(values.uAlpha, (0, interpolate_1.clamp)(values.alpha.ref.value * state.alphaFactor, 0, 1));
+            }
+            renderItem.render(variant, sharedTexturesCount);
+        },
+        getProgram: function (variant) { return renderItem.getProgram(variant); },
+        update: function () { return renderItem.update(); },
+        dispose: function () { return renderItem.destroy(); }
+    };
+}
+exports.createRenderable = createRenderable;
+function createComputeRenderable(renderItem, values) {
+    return {
+        id: getNextRenderableId(),
+        values: values,
+        render: function () { return renderItem.render('compute', 0); },
+        update: function () { return renderItem.update(); },
+        dispose: function () { return renderItem.destroy(); }
+    };
+}
+exports.createComputeRenderable = createComputeRenderable;

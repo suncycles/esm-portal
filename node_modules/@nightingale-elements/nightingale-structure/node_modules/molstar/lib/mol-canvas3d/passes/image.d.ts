@@ -1,0 +1,119 @@
+/**
+ * Copyright (c) 2019-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { WebGLContext } from '../../mol-gl/webgl/context';
+import { RenderTarget } from '../../mol-gl/webgl/render-target';
+import { Renderer } from '../../mol-gl/renderer';
+import { Scene } from '../../mol-gl/scene';
+import { ParamDefinition as PD } from '../../mol-util/param-definition';
+import { Camera } from '../camera';
+import { Viewport } from '../camera/util';
+import { Helper } from '../helper/helper';
+import { AssetManager } from '../../mol-util/assets';
+export declare const ImageParams: {
+    transparentBackground: PD.BooleanParam;
+    dpoitIterations: PD.Numeric;
+    multiSample: PD.Group<PD.Normalize<{
+        mode: string;
+        sampleLevel: number;
+    }>>;
+    postprocessing: PD.Group<PD.Normalize<{
+        occlusion: PD.NamedParams<PD.Normalize<unknown>, "off"> | PD.NamedParams<PD.Normalize<{
+            samples: any;
+            multiScale: any;
+            radius: any;
+            bias: any;
+            blurKernelSize: any;
+            resolutionScale: any;
+            color: any;
+        }>, "on">;
+        shadow: PD.NamedParams<PD.Normalize<unknown>, "off"> | PD.NamedParams<PD.Normalize<{
+            steps: any;
+            bias: any;
+            maxDistance: any;
+            tolerance: any;
+        }>, "on">;
+        outline: PD.NamedParams<PD.Normalize<unknown>, "off"> | PD.NamedParams<PD.Normalize<{
+            scale: any;
+            threshold: any;
+            color: any;
+            includeTransparent: any;
+        }>, "on">;
+        antialiasing: PD.NamedParams<PD.Normalize<unknown>, "off"> | PD.NamedParams<PD.Normalize<{
+            edgeThreshold: any;
+            maxSearchSteps: any;
+        }>, "smaa"> | PD.NamedParams<PD.Normalize<{
+            edgeThresholdMin: any;
+            edgeThresholdMax: any;
+            iterations: any;
+            subpixelQuality: any;
+        }>, "fxaa">;
+        background: PD.Normalize<{
+            variant: any;
+        }>;
+    }>>;
+    marking: PD.Group<PD.Normalize<{
+        enabled: boolean;
+        highlightEdgeColor: import("../../mol-util/color").Color;
+        selectEdgeColor: import("../../mol-util/color").Color;
+        edgeScale: number;
+        highlightEdgeStrength: number;
+        selectEdgeStrength: number;
+        ghostEdgeStrength: number;
+        innerEdgeFactor: number;
+    }>>;
+    cameraHelper: PD.Group<PD.Normalize<{
+        axes: PD.NamedParams<PD.Normalize<unknown>, "off"> | PD.NamedParams<PD.Normalize<{
+            alpha: any;
+            colorX: any;
+            colorY: any;
+            colorZ: any;
+            scale: any;
+            location: any;
+            locationOffsetX: any;
+            locationOffsetY: any;
+            originColor: any;
+            radiusScale: any;
+            showPlanes: any;
+            planeColorXY: any;
+            planeColorXZ: any;
+            planeColorYZ: any;
+            showLabels: any;
+            labelX: any;
+            labelY: any;
+            labelZ: any;
+            labelColorX: any;
+            labelColorY: any;
+            labelColorZ: any;
+            labelOpacity: any;
+            labelScale: any;
+        }>, "on">;
+    }>>;
+};
+export type ImageProps = PD.Values<typeof ImageParams>;
+export declare class ImagePass {
+    private webgl;
+    private renderer;
+    private scene;
+    private camera;
+    private _width;
+    private _height;
+    private _camera;
+    readonly props: ImageProps;
+    private _colorTarget;
+    get colorTarget(): RenderTarget;
+    private readonly drawPass;
+    private readonly multiSamplePass;
+    private readonly multiSampleHelper;
+    private readonly helper;
+    get width(): number;
+    get height(): number;
+    constructor(webgl: WebGLContext, assetManager: AssetManager, renderer: Renderer, scene: Scene, camera: Camera, helper: Helper, enableWboit: boolean, enableDpoit: boolean, props: Partial<ImageProps>);
+    updateBackground(): Promise<void>;
+    setSize(width: number, height: number): void;
+    setProps(props?: Partial<ImageProps>): void;
+    render(): void;
+    getImageData(width: number, height: number, viewport?: Viewport): ImageData;
+}

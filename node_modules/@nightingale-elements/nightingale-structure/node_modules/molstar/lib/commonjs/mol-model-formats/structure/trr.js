@@ -1,0 +1,46 @@
+"use strict";
+/**
+ * Copyright (c) 2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.coordinatesFromTrr = void 0;
+var tslib_1 = require("tslib");
+var mol_task_1 = require("../../mol-task");
+var coordinates_1 = require("../../mol-model/structure/coordinates");
+var cell_1 = require("../../mol-math/geometry/spacegroup/cell");
+var linear_algebra_1 = require("../../mol-math/linear-algebra");
+function coordinatesFromTrr(file) {
+    var _this = this;
+    return mol_task_1.Task.create('Parse TRR', function (ctx) { return tslib_1.__awaiter(_this, void 0, void 0, function () {
+        var deltaTime, offsetTime, frames, i, il, box, x, y, z;
+        return tslib_1.__generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, ctx.update('Converting to coordinates')];
+                case 1:
+                    _a.sent();
+                    deltaTime = (0, coordinates_1.Time)(file.deltaTime, 'step');
+                    offsetTime = (0, coordinates_1.Time)(file.timeOffset, deltaTime.unit);
+                    frames = [];
+                    for (i = 0, il = file.frames.length; i < il; ++i) {
+                        box = file.boxes[i];
+                        x = linear_algebra_1.Vec3.fromArray((0, linear_algebra_1.Vec3)(), box, 0);
+                        y = linear_algebra_1.Vec3.fromArray((0, linear_algebra_1.Vec3)(), box, 3);
+                        z = linear_algebra_1.Vec3.fromArray((0, linear_algebra_1.Vec3)(), box, 6);
+                        frames.push({
+                            elementCount: file.frames[i].count,
+                            cell: cell_1.Cell.fromBasis(x, y, z),
+                            x: file.frames[i].x,
+                            y: file.frames[i].y,
+                            z: file.frames[i].z,
+                            xyzOrdering: { isIdentity: true },
+                            time: (0, coordinates_1.Time)(offsetTime.value + deltaTime.value * i, deltaTime.unit)
+                        });
+                    }
+                    return [2 /*return*/, coordinates_1.Coordinates.create(frames, deltaTime, offsetTime)];
+            }
+        });
+    }); });
+}
+exports.coordinatesFromTrr = coordinatesFromTrr;

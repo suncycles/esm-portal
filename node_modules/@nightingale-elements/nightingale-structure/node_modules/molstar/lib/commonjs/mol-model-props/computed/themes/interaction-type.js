@@ -1,0 +1,114 @@
+"use strict";
+/**
+ * Copyright (c) 2019-2020 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.InteractionTypeColorThemeProvider = exports.InteractionTypeColorTheme = exports.getInteractionTypeColorThemeParams = exports.InteractionTypeColorThemeParams = void 0;
+var color_1 = require("../../../mol-util/color");
+var param_definition_1 = require("../../../mol-util/param-definition");
+var interactions_1 = require("../interactions");
+var color_2 = require("../../../mol-theme/color");
+var common_1 = require("../interactions/common");
+var legend_1 = require("../../../mol-util/legend");
+var interactions_2 = require("../interactions/interactions");
+var util_1 = require("../../../mol-data/util");
+var DefaultColor = (0, color_1.Color)(0xCCCCCC);
+var Description = 'Assigns colors according the interaction type of a link.';
+var InteractionTypeColors = (0, color_1.ColorMap)({
+    HydrogenBond: 0x2B83BA,
+    Hydrophobic: 0x808080,
+    HalogenBond: 0x40FFBF,
+    Ionic: 0xF0C814,
+    MetalCoordination: 0x8C4099,
+    CationPi: 0xFF8000,
+    PiStacking: 0x8CB366,
+    WeakHydrogenBond: 0xC5DDEC,
+});
+var InteractionTypeColorTable = [
+    ['Hydrogen Bond', InteractionTypeColors.HydrogenBond],
+    ['Hydrophobic', InteractionTypeColors.Hydrophobic],
+    ['Halogen Bond', InteractionTypeColors.HalogenBond],
+    ['Ionic', InteractionTypeColors.Ionic],
+    ['Metal Coordination', InteractionTypeColors.MetalCoordination],
+    ['Cation Pi', InteractionTypeColors.CationPi],
+    ['Pi Stacking', InteractionTypeColors.PiStacking],
+    ['Weak HydrogenBond', InteractionTypeColors.WeakHydrogenBond],
+];
+function typeColor(type) {
+    switch (type) {
+        case common_1.InteractionType.HydrogenBond:
+            return InteractionTypeColors.HydrogenBond;
+        case common_1.InteractionType.Hydrophobic:
+            return InteractionTypeColors.Hydrophobic;
+        case common_1.InteractionType.HalogenBond:
+            return InteractionTypeColors.HalogenBond;
+        case common_1.InteractionType.Ionic:
+            return InteractionTypeColors.Ionic;
+        case common_1.InteractionType.MetalCoordination:
+            return InteractionTypeColors.MetalCoordination;
+        case common_1.InteractionType.CationPi:
+            return InteractionTypeColors.CationPi;
+        case common_1.InteractionType.PiStacking:
+            return InteractionTypeColors.PiStacking;
+        case common_1.InteractionType.WeakHydrogenBond:
+            return InteractionTypeColors.WeakHydrogenBond;
+        case common_1.InteractionType.Unknown:
+            return DefaultColor;
+    }
+}
+exports.InteractionTypeColorThemeParams = {};
+function getInteractionTypeColorThemeParams(ctx) {
+    return exports.InteractionTypeColorThemeParams; // TODO return copy
+}
+exports.getInteractionTypeColorThemeParams = getInteractionTypeColorThemeParams;
+function InteractionTypeColorTheme(ctx, props) {
+    var color;
+    var interactions = ctx.structure ? interactions_1.InteractionsProvider.get(ctx.structure) : undefined;
+    var contextHash = interactions ? (0, util_1.hash2)(interactions.id, interactions.version) : -1;
+    if (interactions && interactions.value) {
+        color = function (location) {
+            if (interactions_2.Interactions.isLocation(location)) {
+                var _a = location.data.interactions, unitsContacts = _a.unitsContacts, contacts = _a.contacts;
+                var _b = location.element, unitA = _b.unitA, unitB = _b.unitB, indexA = _b.indexA, indexB = _b.indexB;
+                if (unitA === unitB) {
+                    var links = unitsContacts.get(unitA.id);
+                    var idx = links.getDirectedEdgeIndex(indexA, indexB);
+                    return typeColor(links.edgeProps.type[idx]);
+                }
+                else {
+                    var idx = contacts.getEdgeIndex(indexA, unitA.id, indexB, unitB.id);
+                    return typeColor(contacts.edges[idx].props.type);
+                }
+            }
+            return DefaultColor;
+        };
+    }
+    else {
+        color = function () { return DefaultColor; };
+    }
+    return {
+        factory: InteractionTypeColorTheme,
+        granularity: 'group',
+        color: color,
+        props: props,
+        contextHash: contextHash,
+        description: Description,
+        legend: (0, legend_1.TableLegend)(InteractionTypeColorTable)
+    };
+}
+exports.InteractionTypeColorTheme = InteractionTypeColorTheme;
+exports.InteractionTypeColorThemeProvider = {
+    name: 'interaction-type',
+    label: 'Interaction Type',
+    category: color_2.ColorTheme.Category.Misc,
+    factory: InteractionTypeColorTheme,
+    getParams: getInteractionTypeColorThemeParams,
+    defaultValues: param_definition_1.ParamDefinition.getDefaultValues(exports.InteractionTypeColorThemeParams),
+    isApplicable: function (ctx) { return !!ctx.structure; },
+    ensureCustomProperties: {
+        attach: function (ctx, data) { return data.structure ? interactions_1.InteractionsProvider.attach(ctx, data.structure, void 0, true) : Promise.resolve(); },
+        detach: function (data) { return data.structure && interactions_1.InteractionsProvider.ref(data.structure, false); }
+    }
+};

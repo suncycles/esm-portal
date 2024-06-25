@@ -1,0 +1,25 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.LinesRenderable = exports.LinesSchema = void 0;
+var tslib_1 = require("tslib");
+var renderable_1 = require("../renderable");
+var render_item_1 = require("../webgl/render-item");
+var schema_1 = require("./schema");
+var mol_util_1 = require("../../mol-util");
+var shader_code_1 = require("../shader-code");
+exports.LinesSchema = tslib_1.__assign(tslib_1.__assign(tslib_1.__assign({}, schema_1.BaseSchema), schema_1.SizeSchema), { aGroup: (0, schema_1.AttributeSpec)('float32', 1, 0), aMapping: (0, schema_1.AttributeSpec)('float32', 2, 0), aStart: (0, schema_1.AttributeSpec)('float32', 3, 0), aEnd: (0, schema_1.AttributeSpec)('float32', 3, 0), elements: (0, schema_1.ElementsSpec)('uint32'), dLineSizeAttenuation: (0, schema_1.DefineSpec)('boolean'), uDoubleSided: (0, schema_1.UniformSpec)('b', 'material'), dFlipSided: (0, schema_1.DefineSpec)('boolean') });
+function LinesRenderable(ctx, id, values, state, materialId, variants) {
+    var schema = tslib_1.__assign(tslib_1.__assign(tslib_1.__assign(tslib_1.__assign({}, schema_1.GlobalUniformSchema), schema_1.GlobalTextureSchema), schema_1.InternalSchema), exports.LinesSchema);
+    var internalValues = {
+        uObjectId: mol_util_1.ValueCell.create(id),
+    };
+    var shaderCode = shader_code_1.LinesShaderCode;
+    var renderItem = (0, render_item_1.createGraphicsRenderItem)(ctx, 'triangles', shaderCode, schema, tslib_1.__assign(tslib_1.__assign({}, values), internalValues), materialId, variants);
+    return (0, renderable_1.createRenderable)(renderItem, values, state);
+}
+exports.LinesRenderable = LinesRenderable;

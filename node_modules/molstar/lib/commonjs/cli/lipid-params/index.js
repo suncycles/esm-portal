@@ -1,0 +1,78 @@
+#!/usr/bin/env node
+"use strict";
+/**
+ * Copyright (c) 2020 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+const tslib_1 = require("tslib");
+const argparse = tslib_1.__importStar(require("argparse"));
+const fs = tslib_1.__importStar(require("fs"));
+const path = tslib_1.__importStar(require("path"));
+const node_fetch_1 = tslib_1.__importDefault(require("node-fetch"));
+const generic_1 = require("../../mol-data/generic");
+const LIPIDS_DIR = path.resolve(__dirname, '../../../../build/lipids/');
+const MARTINI_LIPIDS_PATH = path.resolve(LIPIDS_DIR, 'martini_lipids.itp');
+const MARTINI_LIPIDS_URL = 'http://www.cgmartini.nl/images/parameters/lipids/Collections/martini_v2.0_lipids_all_201506.itp';
+async function ensureAvailable(path, url) {
+    if (FORCE_DOWNLOAD || !fs.existsSync(path)) {
+        const name = url.substr(url.lastIndexOf('/') + 1);
+        console.log(`downloading ${name}...`);
+        const data = await (0, node_fetch_1.default)(url);
+        if (!fs.existsSync(LIPIDS_DIR)) {
+            fs.mkdirSync(LIPIDS_DIR);
+        }
+        fs.writeFileSync(path, await data.text());
+        console.log(`done downloading ${name}`);
+    }
+}
+async function ensureLipidsAvailable() { await ensureAvailable(MARTINI_LIPIDS_PATH, MARTINI_LIPIDS_URL); }
+const extraLipids = ['DMPC'];
+async function run(out) {
+    await ensureLipidsAvailable();
+    const lipidsItpStr = fs.readFileSync(MARTINI_LIPIDS_PATH, 'utf8');
+    const lipids = generic_1.UniqueArray.create();
+    const reLipid = /\[moleculetype\]\n; molname      nrexcl\n +([a-zA-Z]{3,5})/g;
+    let m;
+    while ((m = reLipid.exec(lipidsItpStr)) !== null) {
+        const v = m[0].substr(m[0].lastIndexOf(' ') + 1);
+        generic_1.UniqueArray.add(lipids, v, v);
+    }
+    for (const v of extraLipids) {
+        generic_1.UniqueArray.add(lipids, v, v);
+    }
+    const lipidNames = JSON.stringify(lipids.array);
+    if (out) {
+        const output = `/**
+ * Copyright (c) 2020 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * Code-generated lipid params file. Names extracted from Martini FF lipids itp.
+ *
+ * @author molstar/lipid-params cli
+ */
+
+export const LipidNames = new Set(${lipidNames.replace(/"/g, "'").replace(/,/g, ', ')});
+`;
+        fs.writeFileSync(out, output);
+    }
+    else {
+        console.log(lipidNames);
+    }
+}
+const parser = new argparse.ArgumentParser({
+    add_help: true,
+    description: 'Create lipid params (from martini lipids itp)'
+});
+parser.add_argument('--out', '-o', {
+    help: 'Generated lipid params output path, if not given printed to stdout'
+});
+parser.add_argument('--forceDownload', '-f', {
+    action: 'store_true',
+    help: 'Force download of martini lipids itp'
+});
+const args = parser.parse_args();
+const FORCE_DOWNLOAD = args.forceDownload;
+run(args.out || '').catch(e => {
+    console.error(e);
+});

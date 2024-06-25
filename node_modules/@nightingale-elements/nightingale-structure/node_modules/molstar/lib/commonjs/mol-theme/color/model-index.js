@@ -1,0 +1,63 @@
+"use strict";
+/**
+ * Copyright (c) 2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Jason Pattle <jpattle@exscientia.co.uk>
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ModelIndexColorThemeProvider = exports.ModelIndexColorTheme = exports.getModelIndexColorThemeParams = exports.ModelIndexColorThemeParams = void 0;
+var tslib_1 = require("tslib");
+var color_1 = require("../../mol-util/color");
+var structure_1 = require("../../mol-model/structure");
+var param_definition_1 = require("../../mol-util/param-definition");
+var palette_1 = require("../../mol-util/color/palette");
+var categories_1 = require("./categories");
+var DefaultColor = (0, color_1.Color)(0xCCCCCC);
+var Description = 'Gives every model a unique color based on its index.';
+exports.ModelIndexColorThemeParams = tslib_1.__assign({}, (0, palette_1.getPaletteParams)({ type: 'colors', colorList: 'many-distinct' }));
+function getModelIndexColorThemeParams(ctx) {
+    return param_definition_1.ParamDefinition.clone(exports.ModelIndexColorThemeParams);
+}
+exports.getModelIndexColorThemeParams = getModelIndexColorThemeParams;
+function ModelIndexColorTheme(ctx, props) {
+    var _a;
+    var color;
+    var legend;
+    if (ctx.structure) {
+        // max-index is the same for all models
+        var size = ((_a = structure_1.Model.MaxIndex.get(ctx.structure.models[0]).value) !== null && _a !== void 0 ? _a : -1) + 1;
+        var palette_2 = (0, palette_1.getPalette)(size, props);
+        legend = palette_2.legend;
+        color = function (location) {
+            if (structure_1.StructureElement.Location.is(location)) {
+                return palette_2.color(structure_1.Model.Index.get(location.unit.model).value || 0);
+            }
+            else if (structure_1.Bond.isLocation(location)) {
+                return palette_2.color(structure_1.Model.Index.get(location.aUnit.model).value || 0);
+            }
+            return DefaultColor;
+        };
+    }
+    else {
+        color = function () { return DefaultColor; };
+    }
+    return {
+        factory: ModelIndexColorTheme,
+        granularity: 'instance',
+        color: color,
+        props: props,
+        description: Description,
+        legend: legend
+    };
+}
+exports.ModelIndexColorTheme = ModelIndexColorTheme;
+exports.ModelIndexColorThemeProvider = {
+    name: 'model-index',
+    label: 'Model Index',
+    category: categories_1.ColorThemeCategory.Chain,
+    factory: ModelIndexColorTheme,
+    getParams: getModelIndexColorThemeParams,
+    defaultValues: param_definition_1.ParamDefinition.getDefaultValues(exports.ModelIndexColorThemeParams),
+    isApplicable: function (ctx) { return !!ctx.structure && ctx.structure.elementCount > 0; }
+};

@@ -1,0 +1,87 @@
+"use strict";
+/**
+ * Copyright (c) 2020-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PluginAnimationLoop = void 0;
+var tslib_1 = require("tslib");
+var now_1 = require("../mol-util/now");
+var debug_1 = require("../mol-util/debug");
+var timer_1 = require("../mol-gl/webgl/timer");
+var PluginAnimationLoop = /** @class */ (function () {
+    function PluginAnimationLoop(plugin) {
+        var _this = this;
+        this.plugin = plugin;
+        this.currentFrame = void 0;
+        this._isAnimating = false;
+        this.frame = function () {
+            _this.tick((0, now_1.now)());
+            if (_this._isAnimating) {
+                _this.currentFrame = requestAnimationFrame(_this.frame);
+            }
+        };
+    }
+    Object.defineProperty(PluginAnimationLoop.prototype, "isAnimating", {
+        get: function () {
+            return this._isAnimating;
+        },
+        enumerable: false,
+        configurable: true
+    });
+    PluginAnimationLoop.prototype.tick = function (t, options) {
+        var _a, _b;
+        return tslib_1.__awaiter(this, void 0, void 0, function () {
+            var timerResults, _i, timerResults_1, result;
+            return tslib_1.__generator(this, function (_c) {
+                switch (_c.label) {
+                    case 0: return [4 /*yield*/, this.plugin.managers.animation.tick(t, options === null || options === void 0 ? void 0 : options.isSynchronous, options === null || options === void 0 ? void 0 : options.animation)];
+                    case 1:
+                        _c.sent();
+                        (_a = this.plugin.canvas3d) === null || _a === void 0 ? void 0 : _a.tick(t, options);
+                        if (debug_1.isTimingMode) {
+                            timerResults = (_b = this.plugin.canvas3d) === null || _b === void 0 ? void 0 : _b.webgl.timer.resolve();
+                            if (timerResults) {
+                                for (_i = 0, timerResults_1 = timerResults; _i < timerResults_1.length; _i++) {
+                                    result = timerResults_1[_i];
+                                    (0, timer_1.printTimerResults)([result]);
+                                }
+                            }
+                        }
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    PluginAnimationLoop.prototype.resetTime = function (t) {
+        var _a;
+        if (t === void 0) { t = (0, now_1.now)(); }
+        (_a = this.plugin.canvas3d) === null || _a === void 0 ? void 0 : _a.resetTime(t);
+    };
+    PluginAnimationLoop.prototype.start = function (options) {
+        var _a;
+        (_a = this.plugin.canvas3d) === null || _a === void 0 ? void 0 : _a.resume();
+        this._isAnimating = true;
+        this.resetTime();
+        // TODO: should immediate be the default mode?
+        if (options === null || options === void 0 ? void 0 : options.immediate)
+            this.frame();
+        else
+            this.currentFrame = requestAnimationFrame(this.frame);
+    };
+    PluginAnimationLoop.prototype.stop = function (options) {
+        var _a;
+        this._isAnimating = false;
+        if (this.currentFrame !== void 0) {
+            cancelAnimationFrame(this.currentFrame);
+            this.currentFrame = void 0;
+        }
+        if (options === null || options === void 0 ? void 0 : options.noDraw) {
+            (_a = this.plugin.canvas3d) === null || _a === void 0 ? void 0 : _a.pause(options === null || options === void 0 ? void 0 : options.noDraw);
+        }
+    };
+    return PluginAnimationLoop;
+}());
+exports.PluginAnimationLoop = PluginAnimationLoop;

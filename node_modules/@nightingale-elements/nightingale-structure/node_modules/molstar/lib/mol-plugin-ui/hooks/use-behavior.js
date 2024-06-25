@@ -1,0 +1,36 @@
+/**
+ * Copyright (c) 2020-22 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+import React from 'react';
+import { skip } from 'rxjs';
+function useBehaviorLegacy(s) {
+    var _a = React.useState({}), next = _a[1];
+    var current = React.useRef();
+    current.current = s === null || s === void 0 ? void 0 : s.value;
+    React.useEffect(function () {
+        if (!s) {
+            return;
+        }
+        var sub = s.subscribe(function (v) {
+            if (current.current !== v)
+                next({});
+        });
+        return function () { return sub.unsubscribe(); };
+    }, [s]);
+    return s === null || s === void 0 ? void 0 : s.value;
+}
+function useBehaviorReact18(s) {
+    return React.useSyncExternalStore(React.useCallback(function (callback) {
+        var sub = s === null || s === void 0 ? void 0 : s.pipe(skip(1)).subscribe(callback);
+        return function () { return sub === null || sub === void 0 ? void 0 : sub.unsubscribe(); };
+    }, [s]), React.useCallback(function () { return s === null || s === void 0 ? void 0 : s.value; }, [s]));
+}
+var _useBehavior = !!React.useSyncExternalStore
+    ? useBehaviorReact18
+    : useBehaviorLegacy;
+// eslint-disable-next-line
+export function useBehavior(s) {
+    return _useBehavior(s);
+}

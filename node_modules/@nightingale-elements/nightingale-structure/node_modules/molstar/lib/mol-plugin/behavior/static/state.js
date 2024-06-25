@@ -1,0 +1,307 @@
+/**
+ * Copyright (c) 2018-2023 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { __awaiter, __generator } from "tslib";
+import { Structure } from '../../../mol-model/structure';
+import { PluginStateSnapshotManager } from '../../../mol-plugin-state/manager/snapshots';
+import { PluginStateObject as SO } from '../../../mol-plugin-state/objects';
+import { StateTree } from '../../../mol-state';
+import { getFormattedTime } from '../../../mol-util/date';
+import { download } from '../../../mol-util/download';
+import { urlCombine } from '../../../mol-util/url';
+import { PluginCommands } from '../../commands';
+import { PluginConfig } from '../../config';
+export function registerDefault(ctx) {
+    SyncBehaviors(ctx);
+    SetCurrentObject(ctx);
+    Update(ctx);
+    ApplyAction(ctx);
+    RemoveObject(ctx);
+    ToggleExpanded(ctx);
+    ToggleVisibility(ctx);
+    Highlight(ctx);
+    ClearHighlights(ctx);
+    Snapshots(ctx);
+}
+export function SyncBehaviors(ctx) {
+    ctx.state.events.object.created.subscribe(function (o) {
+        if (!SO.isBehavior(o.obj))
+            return;
+        o.obj.data.register(o.ref);
+    });
+    ctx.state.events.object.removed.subscribe(function (o) {
+        var _a, _b, _c, _d;
+        if (!SO.isBehavior(o.obj))
+            return;
+        (_b = (_a = o.obj.data).unregister) === null || _b === void 0 ? void 0 : _b.call(_a);
+        (_d = (_c = o.obj.data).dispose) === null || _d === void 0 ? void 0 : _d.call(_c);
+    });
+    ctx.state.events.object.updated.subscribe(function (o) {
+        var _a, _b, _c, _d;
+        if (o.action === 'recreate') {
+            if (o.oldObj && SO.isBehavior(o.oldObj)) {
+                (_b = (_a = o.oldObj.data).unregister) === null || _b === void 0 ? void 0 : _b.call(_a);
+                (_d = (_c = o.oldObj.data).dispose) === null || _d === void 0 ? void 0 : _d.call(_c);
+            }
+            if (o.obj && SO.isBehavior(o.obj))
+                o.obj.data.register(o.ref);
+        }
+    });
+}
+export function SetCurrentObject(ctx) {
+    PluginCommands.State.SetCurrentObject.subscribe(ctx, function (_a) {
+        var state = _a.state, ref = _a.ref;
+        return state.setCurrent(ref);
+    });
+}
+export function Update(ctx) {
+    PluginCommands.State.Update.subscribe(ctx, function (_a) {
+        var state = _a.state, tree = _a.tree, options = _a.options;
+        return ctx.runTask(state.updateTree(tree, options));
+    });
+}
+export function ApplyAction(ctx) {
+    PluginCommands.State.ApplyAction.subscribe(ctx, function (_a) {
+        var state = _a.state, action = _a.action, ref = _a.ref;
+        return ctx.runTask(state.applyAction(action.action, action.params, ref));
+    });
+}
+export function RemoveObject(ctx) {
+    function remove(state, ref) {
+        var tree = state.build().delete(ref);
+        return ctx.runTask(state.updateTree(tree));
+    }
+    PluginCommands.State.RemoveObject.subscribe(ctx, function (_a) {
+        var state = _a.state, ref = _a.ref, removeParentGhosts = _a.removeParentGhosts;
+        if (removeParentGhosts) {
+            var tree = state.tree;
+            var curr = tree.transforms.get(ref);
+            if (curr.parent === ref)
+                return remove(state, ref);
+            while (true) {
+                var children = tree.children.get(curr.parent);
+                if (curr.parent === curr.ref || children.size > 1)
+                    return remove(state, curr.ref);
+                var parent_1 = tree.transforms.get(curr.parent);
+                // TODO: should this use "cell state" instead?
+                if (!parent_1.state.isGhost)
+                    return remove(state, curr.ref);
+                curr = parent_1;
+            }
+        }
+        else {
+            return remove(state, ref);
+        }
+    });
+}
+export function ToggleExpanded(ctx) {
+    PluginCommands.State.ToggleExpanded.subscribe(ctx, function (_a) {
+        var state = _a.state, ref = _a.ref;
+        return state.updateCellState(ref, function (_a) {
+            var isCollapsed = _a.isCollapsed;
+            return ({ isCollapsed: !isCollapsed });
+        });
+    });
+}
+export function ToggleVisibility(ctx) {
+    PluginCommands.State.ToggleVisibility.subscribe(ctx, function (_a) {
+        var state = _a.state, ref = _a.ref;
+        return setSubtreeVisibility(state, ref, !state.cells.get(ref).state.isHidden);
+    });
+}
+export function setSubtreeVisibility(state, root, value) {
+    StateTree.doPreOrder(state.tree, state.transforms.get(root), { state: state, value: value }, setVisibilityVisitor);
+}
+function setVisibilityVisitor(t, tree, ctx) {
+    ctx.state.updateCellState(t.ref, { isHidden: ctx.value });
+}
+export function Highlight(ctx) {
+    PluginCommands.Interactivity.Object.Highlight.subscribe(ctx, function (_a) {
+        var state = _a.state, ref = _a.ref;
+        if (!ctx.canvas3d || ctx.isBusy)
+            return;
+        ctx.managers.interactivity.lociHighlights.clearHighlights();
+        var refs = typeof ref === 'string' ? [ref] : ref;
+        for (var _i = 0, refs_1 = refs; _i < refs_1.length; _i++) {
+            var r = refs_1[_i];
+            var cell = state.cells.get(r);
+            if (!cell)
+                continue;
+            if (SO.Molecule.Structure.is(cell.obj)) {
+                ctx.managers.interactivity.lociHighlights.highlight({ loci: Structure.Loci(cell.obj.data) }, false);
+            }
+            else if (cell && SO.isRepresentation3D(cell.obj)) {
+                var repr = cell.obj.data.repr;
+                for (var _b = 0, _c = repr.getAllLoci(); _b < _c.length; _b++) {
+                    var loci = _c[_b];
+                    ctx.managers.interactivity.lociHighlights.highlight({ loci: loci, repr: repr }, false);
+                }
+            }
+            else if (SO.Molecule.Structure.Selections.is(cell.obj)) {
+                for (var _d = 0, _e = cell.obj.data; _d < _e.length; _d++) {
+                    var entry = _e[_d];
+                    ctx.managers.interactivity.lociHighlights.highlight({ loci: entry.loci }, false);
+                }
+            }
+        }
+        // TODO: highlight volumes?
+        // TODO: select structures of subtree?
+    });
+}
+export function ClearHighlights(ctx) {
+    PluginCommands.Interactivity.ClearHighlights.subscribe(ctx, function () {
+        ctx.managers.interactivity.lociHighlights.clearHighlights();
+    });
+}
+export function Snapshots(ctx) {
+    var _this = this;
+    ctx.config.set(PluginConfig.State.CurrentServer, ctx.config.get(PluginConfig.State.DefaultServer));
+    PluginCommands.State.Snapshots.Clear.subscribe(ctx, function () {
+        ctx.managers.snapshot.clear();
+    });
+    PluginCommands.State.Snapshots.Remove.subscribe(ctx, function (_a) {
+        var id = _a.id;
+        ctx.managers.snapshot.remove(id);
+    });
+    PluginCommands.State.Snapshots.Add.subscribe(ctx, function (_a) {
+        var name = _a.name, description = _a.description, params = _a.params;
+        return __awaiter(_this, void 0, void 0, function () {
+            var snapshot, image, _b, entry;
+            var _c;
+            return __generator(this, function (_d) {
+                switch (_d.label) {
+                    case 0:
+                        snapshot = ctx.state.getSnapshot(params);
+                        if (!((_c = params === null || params === void 0 ? void 0 : params.image) !== null && _c !== void 0 ? _c : ctx.state.snapshotParams.value.image)) return [3 /*break*/, 2];
+                        return [4 /*yield*/, PluginStateSnapshotManager.getCanvasImageAsset(ctx, "".concat(snapshot.id, "-image.png"))];
+                    case 1:
+                        _b = _d.sent();
+                        return [3 /*break*/, 3];
+                    case 2:
+                        _b = undefined;
+                        _d.label = 3;
+                    case 3:
+                        image = _b;
+                        entry = PluginStateSnapshotManager.Entry(snapshot, { name: name, description: description, image: image });
+                        ctx.managers.snapshot.add(entry);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    });
+    PluginCommands.State.Snapshots.Replace.subscribe(ctx, function (_a) {
+        var id = _a.id, params = _a.params;
+        return __awaiter(_this, void 0, void 0, function () {
+            var snapshot, image, _b;
+            var _c;
+            return __generator(this, function (_d) {
+                switch (_d.label) {
+                    case 0:
+                        snapshot = ctx.state.getSnapshot(params);
+                        if (!((_c = params === null || params === void 0 ? void 0 : params.image) !== null && _c !== void 0 ? _c : ctx.state.snapshotParams.value.image)) return [3 /*break*/, 2];
+                        return [4 /*yield*/, PluginStateSnapshotManager.getCanvasImageAsset(ctx, "".concat(snapshot.id, "-image.png"))];
+                    case 1:
+                        _b = _d.sent();
+                        return [3 /*break*/, 3];
+                    case 2:
+                        _b = undefined;
+                        _d.label = 3;
+                    case 3:
+                        image = _b;
+                        ctx.managers.snapshot.replace(id, ctx.state.getSnapshot(params), { image: image });
+                        return [2 /*return*/];
+                }
+            });
+        });
+    });
+    PluginCommands.State.Snapshots.Move.subscribe(ctx, function (_a) {
+        var id = _a.id, dir = _a.dir;
+        ctx.managers.snapshot.move(id, dir);
+    });
+    PluginCommands.State.Snapshots.Apply.subscribe(ctx, function (_a) {
+        var id = _a.id;
+        var snapshot = ctx.managers.snapshot.setCurrent(id);
+        if (!snapshot)
+            return;
+        return ctx.state.setSnapshot(snapshot);
+    });
+    PluginCommands.State.Snapshots.Upload.subscribe(ctx, function (_a) {
+        var name = _a.name, description = _a.description, playOnLoad = _a.playOnLoad, serverUrl = _a.serverUrl, params = _a.params;
+        return __awaiter(_this, void 0, void 0, function () {
+            var _b, _c, _d, _e;
+            var _f;
+            return __generator(this, function (_g) {
+                switch (_g.label) {
+                    case 0:
+                        _b = fetch;
+                        _c = [urlCombine(serverUrl, "set?name=".concat(encodeURIComponent(name || ''), "&description=").concat(encodeURIComponent(description || '')))];
+                        _f = {
+                            method: 'POST',
+                            mode: 'cors',
+                            referrer: 'no-referrer',
+                            headers: { 'Content-Type': 'application/json; charset=utf-8' }
+                        };
+                        _e = (_d = JSON).stringify;
+                        return [4 /*yield*/, ctx.managers.snapshot.getStateSnapshot({ name: name, description: description, playOnLoad: playOnLoad })];
+                    case 1: return [2 /*return*/, _b.apply(void 0, _c.concat([(_f.body = _e.apply(_d, [_g.sent()]),
+                                _f)]))];
+                }
+            });
+        });
+    });
+    PluginCommands.State.Snapshots.Fetch.subscribe(ctx, function (_a) {
+        var url = _a.url;
+        return __awaiter(_this, void 0, void 0, function () {
+            var json;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0: return [4 /*yield*/, ctx.runTask(ctx.fetch({ url: url, type: 'json' }))];
+                    case 1:
+                        json = _b.sent();
+                        return [4 /*yield*/, ctx.managers.snapshot.setStateSnapshot(json.data)];
+                    case 2:
+                        _b.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    });
+    PluginCommands.State.Snapshots.DownloadToFile.subscribe(ctx, function (_a) {
+        var name = _a.name, type = _a.type, params = _a.params;
+        return __awaiter(_this, void 0, void 0, function () {
+            var filename, data;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        filename = "mol-star_state_".concat((name || getFormattedTime()), ".").concat(type === 'json' ? 'molj' : 'molx');
+                        return [4 /*yield*/, ctx.managers.snapshot.serialize({ type: type, params: params })];
+                    case 1:
+                        data = _b.sent();
+                        download(data, "".concat(filename));
+                        return [2 /*return*/];
+                }
+            });
+        });
+    });
+    PluginCommands.State.Snapshots.OpenFile.subscribe(ctx, function (_a) {
+        var file = _a.file;
+        return ctx.managers.snapshot.open(file);
+    });
+    PluginCommands.State.Snapshots.OpenUrl.subscribe(ctx, function (_a) {
+        var url = _a.url, type = _a.type;
+        return __awaiter(_this, void 0, void 0, function () {
+            var data;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0: return [4 /*yield*/, ctx.runTask(ctx.fetch({ url: url, type: 'binary' }))];
+                    case 1:
+                        data = _b.sent();
+                        return [2 /*return*/, ctx.managers.snapshot.open(new File([data], "state.".concat(type)))];
+                }
+            });
+        });
+    });
+}

@@ -1,0 +1,262 @@
+/**
+ * Copyright (c) 2019 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+import { __assign, __awaiter, __generator } from "tslib";
+import { PDBeStructureQualityReport } from '../../extensions/pdbe';
+import { EmptyLoci } from '../../mol-model/loci';
+import { StructureSelection } from '../../mol-model/structure';
+import { AnimateModelIndex } from '../../mol-plugin-state/animation/built-in/model-index';
+import { createPluginUI } from '../../mol-plugin-ui/react18';
+import { DefaultPluginUISpec } from '../../mol-plugin-ui/spec';
+import { PluginCommands } from '../../mol-plugin/commands';
+import { Script } from '../../mol-script/script';
+import { Asset } from '../../mol-util/assets';
+import { Color } from '../../mol-util/color';
+import { StripedResidues } from './coloring';
+import { CustomToastMessage } from './controls';
+import { CustomColorThemeProvider } from './custom-theme';
+import './index.html';
+import { buildStaticSuperposition, dynamicSuperpositionTest, StaticSuperpositionTestData } from './superposition';
+require('mol-plugin-ui/skin/light.scss');
+var BasicWrapper = /** @class */ (function () {
+    function BasicWrapper() {
+        var _this = this;
+        this.animate = {
+            modelIndex: {
+                targetFps: 8,
+                onceForward: function () { _this.plugin.managers.animation.play(AnimateModelIndex, { duration: { name: 'computed', params: { targetFps: _this.animateModelIndexTargetFps() } }, mode: { name: 'once', params: { direction: 'forward' } } }); },
+                onceBackward: function () { _this.plugin.managers.animation.play(AnimateModelIndex, { duration: { name: 'computed', params: { targetFps: _this.animateModelIndexTargetFps() } }, mode: { name: 'once', params: { direction: 'backward' } } }); },
+                palindrome: function () { _this.plugin.managers.animation.play(AnimateModelIndex, { duration: { name: 'computed', params: { targetFps: _this.animateModelIndexTargetFps() } }, mode: { name: 'palindrome', params: {} } }); },
+                loop: function () { _this.plugin.managers.animation.play(AnimateModelIndex, { duration: { name: 'computed', params: { targetFps: _this.animateModelIndexTargetFps() } }, mode: { name: 'loop', params: { direction: 'forward' } } }); },
+                stop: function () { return _this.plugin.managers.animation.stop(); }
+            }
+        };
+        this.coloring = {
+            applyStripes: function () { return __awaiter(_this, void 0, void 0, function () {
+                var _this = this;
+                return __generator(this, function (_a) {
+                    this.plugin.dataTransaction(function () { return __awaiter(_this, void 0, void 0, function () {
+                        var _i, _a, s;
+                        return __generator(this, function (_b) {
+                            switch (_b.label) {
+                                case 0:
+                                    _i = 0, _a = this.plugin.managers.structure.hierarchy.current.structures;
+                                    _b.label = 1;
+                                case 1:
+                                    if (!(_i < _a.length)) return [3 /*break*/, 4];
+                                    s = _a[_i];
+                                    return [4 /*yield*/, this.plugin.managers.structure.component.updateRepresentationsTheme(s.components, { color: StripedResidues.propertyProvider.descriptor.name })];
+                                case 2:
+                                    _b.sent();
+                                    _b.label = 3;
+                                case 3:
+                                    _i++;
+                                    return [3 /*break*/, 1];
+                                case 4: return [2 /*return*/];
+                            }
+                        });
+                    }); });
+                    return [2 /*return*/];
+                });
+            }); },
+            applyCustomTheme: function () { return __awaiter(_this, void 0, void 0, function () {
+                var _this = this;
+                return __generator(this, function (_a) {
+                    this.plugin.dataTransaction(function () { return __awaiter(_this, void 0, void 0, function () {
+                        var _i, _a, s;
+                        return __generator(this, function (_b) {
+                            switch (_b.label) {
+                                case 0:
+                                    _i = 0, _a = this.plugin.managers.structure.hierarchy.current.structures;
+                                    _b.label = 1;
+                                case 1:
+                                    if (!(_i < _a.length)) return [3 /*break*/, 4];
+                                    s = _a[_i];
+                                    return [4 /*yield*/, this.plugin.managers.structure.component.updateRepresentationsTheme(s.components, { color: CustomColorThemeProvider.name })];
+                                case 2:
+                                    _b.sent();
+                                    _b.label = 3;
+                                case 3:
+                                    _i++;
+                                    return [3 /*break*/, 1];
+                                case 4: return [2 /*return*/];
+                            }
+                        });
+                    }); });
+                    return [2 /*return*/];
+                });
+            }); },
+            applyDefault: function () { return __awaiter(_this, void 0, void 0, function () {
+                var _this = this;
+                return __generator(this, function (_a) {
+                    this.plugin.dataTransaction(function () { return __awaiter(_this, void 0, void 0, function () {
+                        var _i, _a, s;
+                        return __generator(this, function (_b) {
+                            switch (_b.label) {
+                                case 0:
+                                    _i = 0, _a = this.plugin.managers.structure.hierarchy.current.structures;
+                                    _b.label = 1;
+                                case 1:
+                                    if (!(_i < _a.length)) return [3 /*break*/, 4];
+                                    s = _a[_i];
+                                    return [4 /*yield*/, this.plugin.managers.structure.component.updateRepresentationsTheme(s.components, { color: 'default' })];
+                                case 2:
+                                    _b.sent();
+                                    _b.label = 3;
+                                case 3:
+                                    _i++;
+                                    return [3 /*break*/, 1];
+                                case 4: return [2 /*return*/];
+                            }
+                        });
+                    }); });
+                    return [2 /*return*/];
+                });
+            }); }
+        };
+        this.interactivity = {
+            highlightOn: function () {
+                var _a, _b;
+                var data = (_b = (_a = _this.plugin.managers.structure.hierarchy.current.structures[0]) === null || _a === void 0 ? void 0 : _a.cell.obj) === null || _b === void 0 ? void 0 : _b.data;
+                if (!data)
+                    return;
+                var seq_id = 7;
+                var sel = Script.getStructureSelection(function (Q) { return Q.struct.generator.atomGroups({
+                    'residue-test': Q.core.rel.eq([Q.struct.atomProperty.macromolecular.label_seq_id(), seq_id]),
+                    'group-by': Q.struct.atomProperty.macromolecular.residueKey()
+                }); }, data);
+                var loci = StructureSelection.toLociWithSourceUnits(sel);
+                _this.plugin.managers.interactivity.lociHighlights.highlightOnly({ loci: loci });
+            },
+            clearHighlight: function () {
+                _this.plugin.managers.interactivity.lociHighlights.highlightOnly({ loci: EmptyLoci });
+            }
+        };
+        this.tests = {
+            staticSuperposition: function () { return __awaiter(_this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.plugin.clear()];
+                        case 1:
+                            _a.sent();
+                            return [2 /*return*/, buildStaticSuperposition(this.plugin, StaticSuperpositionTestData)];
+                    }
+                });
+            }); },
+            dynamicSuperposition: function () { return __awaiter(_this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0: return [4 /*yield*/, this.plugin.clear()];
+                        case 1:
+                            _a.sent();
+                            return [2 /*return*/, dynamicSuperpositionTest(this.plugin, ['1tqn', '2hhb', '4hhb'], 'HEM')];
+                    }
+                });
+            }); },
+            toggleValidationTooltip: function () {
+                return _this.plugin.state.updateBehavior(PDBeStructureQualityReport, function (params) { params.showTooltip = !params.showTooltip; });
+            },
+            showToasts: function () {
+                PluginCommands.Toast.Show(_this.plugin, {
+                    title: 'Toast 1',
+                    message: 'This is an example text, timeout 3s',
+                    key: 'toast-1',
+                    timeoutMs: 3000
+                });
+                PluginCommands.Toast.Show(_this.plugin, {
+                    title: 'Toast 2',
+                    message: CustomToastMessage,
+                    key: 'toast-2'
+                });
+            },
+            hideToasts: function () {
+                PluginCommands.Toast.Hide(_this.plugin, { key: 'toast-1' });
+                PluginCommands.Toast.Hide(_this.plugin, { key: 'toast-2' });
+            }
+        };
+    }
+    BasicWrapper.prototype.init = function (target) {
+        return __awaiter(this, void 0, void 0, function () {
+            var _a;
+            return __generator(this, function (_b) {
+                switch (_b.label) {
+                    case 0:
+                        _a = this;
+                        return [4 /*yield*/, createPluginUI(typeof target === 'string' ? document.getElementById(target) : target, __assign(__assign({}, DefaultPluginUISpec()), { layout: {
+                                    initial: {
+                                        isExpanded: false,
+                                        showControls: false
+                                    }
+                                }, components: {
+                                    remoteState: 'none'
+                                } }))];
+                    case 1:
+                        _a.plugin = _b.sent();
+                        this.plugin.representation.structure.themes.colorThemeRegistry.add(StripedResidues.colorThemeProvider);
+                        this.plugin.representation.structure.themes.colorThemeRegistry.add(CustomColorThemeProvider);
+                        this.plugin.managers.lociLabels.addProvider(StripedResidues.labelProvider);
+                        this.plugin.customModelProperties.register(StripedResidues.propertyProvider, true);
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    BasicWrapper.prototype.load = function (_a) {
+        var url = _a.url, _b = _a.format, format = _b === void 0 ? 'mmcif' : _b, _c = _a.isBinary, isBinary = _c === void 0 ? false : _c, _d = _a.assemblyId, assemblyId = _d === void 0 ? '' : _d;
+        return __awaiter(this, void 0, void 0, function () {
+            var data, trajectory;
+            return __generator(this, function (_e) {
+                switch (_e.label) {
+                    case 0: return [4 /*yield*/, this.plugin.clear()];
+                    case 1:
+                        _e.sent();
+                        return [4 /*yield*/, this.plugin.builders.data.download({ url: Asset.Url(url), isBinary: isBinary }, { state: { isGhost: true } })];
+                    case 2:
+                        data = _e.sent();
+                        return [4 /*yield*/, this.plugin.builders.structure.parseTrajectory(data, format)];
+                    case 3:
+                        trajectory = _e.sent();
+                        return [4 /*yield*/, this.plugin.builders.structure.hierarchy.applyPreset(trajectory, 'default', {
+                                structure: assemblyId ? {
+                                    name: 'assembly',
+                                    params: { id: assemblyId }
+                                } : {
+                                    name: 'model',
+                                    params: {}
+                                },
+                                showUnitcell: false,
+                                representationPreset: 'auto'
+                            })];
+                    case 4:
+                        _e.sent();
+                        return [2 /*return*/];
+                }
+            });
+        });
+    };
+    BasicWrapper.prototype.setBackground = function (color) {
+        PluginCommands.Canvas3D.SetSettings(this.plugin, { settings: function (props) { props.renderer.backgroundColor = Color(color); } });
+    };
+    BasicWrapper.prototype.toggleSpin = function () {
+        if (!this.plugin.canvas3d)
+            return;
+        var trackball = this.plugin.canvas3d.props.trackball;
+        PluginCommands.Canvas3D.SetSettings(this.plugin, {
+            settings: {
+                trackball: __assign(__assign({}, trackball), { animate: trackball.animate.name === 'spin'
+                        ? { name: 'off', params: {} }
+                        : { name: 'spin', params: { speed: 1 } } })
+            }
+        });
+        if (this.plugin.canvas3d.props.trackball.animate.name !== 'spin') {
+            PluginCommands.Camera.Reset(this.plugin, {});
+        }
+    };
+    BasicWrapper.prototype.animateModelIndexTargetFps = function () {
+        return Math.max(1, this.animate.modelIndex.targetFps | 0);
+    };
+    return BasicWrapper;
+}());
+window.BasicMolStarWrapper = new BasicWrapper();

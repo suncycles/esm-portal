@@ -1,0 +1,32 @@
+"use strict";
+/**
+ * Copyright (c) 2020 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Passes = void 0;
+var draw_1 = require("./draw");
+var pick_1 = require("./pick");
+var multi_sample_1 = require("./multi-sample");
+var Passes = /** @class */ (function () {
+    function Passes(webgl, assetManager, attribs) {
+        if (attribs === void 0) { attribs = {}; }
+        this.webgl = webgl;
+        var gl = webgl.gl;
+        this.draw = new draw_1.DrawPass(webgl, assetManager, gl.drawingBufferWidth, gl.drawingBufferHeight, attribs.enableWboit || false, attribs.enableDpoit || false);
+        this.pick = new pick_1.PickPass(webgl, this.draw, attribs.pickScale || 0.25);
+        this.multiSample = new multi_sample_1.MultiSamplePass(webgl, this.draw);
+    }
+    Passes.prototype.updateSize = function () {
+        var gl = this.webgl.gl;
+        // Avoid setting dimensions to 0x0 because it causes "empty textures are not allowed" error.
+        var width = Math.max(gl.drawingBufferWidth, 2);
+        var height = Math.max(gl.drawingBufferHeight, 2);
+        this.draw.setSize(width, height);
+        this.pick.syncSize();
+        this.multiSample.syncSize();
+    };
+    return Passes;
+}());
+exports.Passes = Passes;

@@ -1,0 +1,56 @@
+/**
+ * Copyright (c) 2020-2023 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { TextureImage } from '../../../mol-gl/renderable/util';
+import { Sphere3D } from '../../../mol-math/geometry';
+import { Vec2 } from '../../../mol-math/linear-algebra';
+import { ValueCell } from '../../../mol-util';
+import { ParamDefinition as PD } from '../../../mol-util/param-definition';
+import { GeometryUtils } from '../geometry';
+export declare const InterpolationTypes: {
+    nearest: string;
+    catmulrom: string;
+    mitchell: string;
+    bspline: string;
+};
+export type InterpolationTypes = keyof typeof InterpolationTypes;
+export declare const InterpolationTypeNames: ("nearest" | "bspline" | "catmulrom" | "mitchell")[];
+export { Image };
+interface Image {
+    readonly kind: 'image';
+    readonly imageTexture: ValueCell<TextureImage<Uint8Array>>;
+    readonly imageTextureDim: ValueCell<Vec2>;
+    readonly cornerBuffer: ValueCell<Float32Array>;
+    readonly groupTexture: ValueCell<TextureImage<Uint8Array>>;
+    /** Bounding sphere of the image */
+    boundingSphere: Sphere3D;
+}
+declare namespace Image {
+    function create(imageTexture: TextureImage<Uint8Array>, corners: Float32Array, groupTexture: TextureImage<Uint8Array>, image?: Image): Image;
+    function createEmpty(image?: Image): Image;
+    const Params: {
+        interpolation: PD.Select<"nearest" | "bspline" | "catmulrom" | "mitchell">;
+        alpha: PD.Numeric;
+        quality: PD.Select<"auto" | "medium" | "high" | "low" | "custom" | "highest" | "higher" | "lower" | "lowest">;
+        material: PD.Group<PD.Normalize<{
+            metalness: number;
+            roughness: number;
+            bumpiness: number;
+        }>>;
+        clip: PD.Group<PD.Normalize<{
+            variant: import("../../../mol-util/clip").Clip.Variant;
+            objects: PD.Normalize<{
+                type: any;
+                invert: any;
+                position: any;
+                rotation: any;
+                scale: any;
+            }>[];
+        }>>;
+        instanceGranularity: PD.BooleanParam;
+    };
+    type Params = typeof Params;
+    const Utils: GeometryUtils<Image, Params>;
+}

@@ -1,0 +1,96 @@
+/**
+ * Copyright (c) 2020-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { Structure, Model } from '../mol-model/structure';
+import { PluginFeatureDetection } from './features';
+var PluginConfigItem = /** @class */ (function () {
+    function PluginConfigItem(key, defaultValue) {
+        this.key = key;
+        this.defaultValue = defaultValue;
+    }
+    PluginConfigItem.prototype.toString = function () { return this.key; };
+    PluginConfigItem.prototype.valueOf = function () { return this.key; };
+    return PluginConfigItem;
+}());
+export { PluginConfigItem };
+function item(key, defaultValue) { return new PluginConfigItem(key, defaultValue); }
+export var PluginConfig = {
+    item: item,
+    General: {
+        IsBusyTimeoutMs: item('plugin-config.is-busy-timeout', 750),
+        DisableAntialiasing: item('plugin-config.disable-antialiasing', false),
+        DisablePreserveDrawingBuffer: item('plugin-config.disable-preserve-drawing-buffer', false),
+        PixelScale: item('plugin-config.pixel-scale', 1),
+        PickScale: item('plugin-config.pick-scale', 0.25),
+        PickPadding: item('plugin-config.pick-padding', 3),
+        EnableWboit: item('plugin-config.enable-wboit', true),
+        EnableDpoit: item('plugin-config.enable-dpoit', false),
+        // as of Oct 1 2021, WebGL 2 doesn't work on iOS 15.
+        // TODO: check back in a few weeks to see if it was fixed
+        PreferWebGl1: item('plugin-config.prefer-webgl1', PluginFeatureDetection.preferWebGl1),
+        AllowMajorPerformanceCaveat: item('plugin-config.allow-major-performance-caveat', false),
+        PowerPreference: item('plugin-config.power-preference', 'high-performance'),
+    },
+    State: {
+        DefaultServer: item('plugin-state.server', 'https://webchem.ncbr.muni.cz/molstar-state'),
+        CurrentServer: item('plugin-state.server', 'https://webchem.ncbr.muni.cz/molstar-state'),
+        HistoryCapacity: item('history-capacity.server', 5)
+    },
+    VolumeStreaming: {
+        Enabled: item('volume-streaming.enabled', true),
+        DefaultServer: item('volume-streaming.server', 'https://ds.litemol.org'),
+        CanStream: item('volume-streaming.can-stream', function (s, plugin) {
+            return s.models.length === 1 && Model.probablyHasDensityMap(s.models[0]);
+        }),
+        EmdbHeaderServer: item('volume-streaming.emdb-header-server', 'https://ftp.wwpdb.org/pub/emdb/structures'),
+    },
+    Viewport: {
+        ShowExpand: item('viewer.show-expand-button', true),
+        ShowControls: item('viewer.show-controls-button', true),
+        ShowSettings: item('viewer.show-settings-button', true),
+        ShowSelectionMode: item('viewer.show-selection-model-button', true),
+        ShowAnimation: item('viewer.show-animation-button', true),
+        ShowTrajectoryControls: item('viewer.show-trajectory-controls', true),
+    },
+    Download: {
+        DefaultPdbProvider: item('download.default-pdb-provider', 'pdbe'),
+        DefaultEmdbProvider: item('download.default-emdb-provider', 'pdbe'),
+    },
+    Structure: {
+        SizeThresholds: item('structure.size-thresholds', Structure.DefaultSizeThresholds),
+        DefaultRepresentationPreset: item('structure.default-representation-preset', 'auto'),
+        DefaultRepresentationPresetParams: item('structure.default-representation-preset-params', {}),
+        SaccharideCompIdMapType: item('structure.saccharide-comp-id-map-type', 'default'),
+    },
+    Background: {
+        Styles: item('background.styles', []),
+    }
+};
+var PluginConfigManager = /** @class */ (function () {
+    function PluginConfigManager(initial) {
+        var _this = this;
+        this._config = new Map();
+        if (!initial)
+            return;
+        initial.forEach(function (_a) {
+            var k = _a[0], v = _a[1];
+            return _this._config.set(k, v);
+        });
+    }
+    PluginConfigManager.prototype.get = function (key) {
+        if (!this._config.has(key))
+            return key.defaultValue;
+        return this._config.get(key);
+    };
+    PluginConfigManager.prototype.set = function (key, value) {
+        this._config.set(key, value);
+    };
+    PluginConfigManager.prototype.delete = function (key) {
+        this._config.delete(key);
+    };
+    return PluginConfigManager;
+}());
+export { PluginConfigManager };

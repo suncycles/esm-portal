@@ -1,0 +1,178 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2020 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Michal Malý <michal.maly@ibt.cas.cz>
+ * @author Jiří Černý <jiri.cerny@ibt.cas.cz>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ConfalPyramidsRepresentationProvider = exports.ConfalPyramidsRepresentation = exports.getConfalPyramidsParams = exports.ConfalPyramidsParams = void 0;
+var tslib_1 = require("tslib");
+var property_1 = require("./property");
+var util_1 = require("./util");
+var types_1 = require("./types");
+var property_2 = require("../property");
+var mesh_1 = require("../../../mol-geo/geometry/mesh/mesh");
+var mesh_builder_1 = require("../../../mol-geo/geometry/mesh/mesh-builder");
+var primitive_1 = require("../../../mol-geo/primitive/primitive");
+var location_iterator_1 = require("../../../mol-geo/util/location-iterator");
+var linear_algebra_1 = require("../../../mol-math/linear-algebra");
+var loci_1 = require("../../../mol-model/loci");
+var structure_1 = require("../../../mol-model/structure");
+var representation_1 = require("../../../mol-repr/representation");
+var representation_2 = require("../../../mol-repr/structure/representation");
+var units_visual_1 = require("../../../mol-repr/structure/units-visual");
+var param_definition_1 = require("../../../mol-util/param-definition");
+var location_1 = require("../../../mol-model/location");
+var t = linear_algebra_1.Mat4.identity();
+var w = linear_algebra_1.Vec3.zero();
+var mp = linear_algebra_1.Vec3.zero();
+var posO3 = (0, linear_algebra_1.Vec3)();
+var posP = (0, linear_algebra_1.Vec3)();
+var posOP1 = (0, linear_algebra_1.Vec3)();
+var posOP2 = (0, linear_algebra_1.Vec3)();
+var posO5 = (0, linear_algebra_1.Vec3)();
+function calcMidpoint(mp, v, w) {
+    linear_algebra_1.Vec3.sub(mp, v, w);
+    linear_algebra_1.Vec3.scale(mp, mp, 0.5);
+    linear_algebra_1.Vec3.add(mp, mp, w);
+}
+function shiftVertex(vec, ref, scale) {
+    linear_algebra_1.Vec3.sub(w, vec, ref);
+    linear_algebra_1.Vec3.scale(w, w, scale);
+    linear_algebra_1.Vec3.add(vec, vec, w);
+}
+var ConfalPyramidsMeshParams = tslib_1.__assign({}, units_visual_1.UnitsMeshParams);
+function createConfalPyramidsIterator(structureGroup) {
+    var _a, _b;
+    var structure = structureGroup.structure, group = structureGroup.group;
+    var instanceCount = group.units.length;
+    var data = (_b = (_a = property_1.ConfalPyramidsProvider.get(structure.model)) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.data;
+    if (!data)
+        return (0, location_iterator_1.LocationIterator)(0, 1, 1, function () { return location_1.NullLocation; });
+    var halfPyramidsCount = data.steps.length * 2;
+    var getLocation = function (groupIndex, instanceIndex) {
+        if (halfPyramidsCount <= groupIndex)
+            return location_1.NullLocation;
+        var idx = Math.floor(groupIndex / 2); // Map groupIndex to a step, see createConfalPyramidsMesh() for full explanation
+        return types_1.ConfalPyramidsTypes.Location(data.steps[idx], groupIndex % 2 === 1);
+    };
+    return (0, location_iterator_1.LocationIterator)(halfPyramidsCount, instanceCount, 1, getLocation);
+}
+function createConfalPyramidsMesh(ctx, unit, structure, theme, props, mesh) {
+    var _a, _b;
+    if (!structure_1.Unit.isAtomic(unit))
+        return mesh_1.Mesh.createEmpty(mesh);
+    var data = (_b = (_a = property_1.ConfalPyramidsProvider.get(structure.model)) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.data;
+    if (!data)
+        return mesh_1.Mesh.createEmpty(mesh);
+    var steps = data.steps, mapping = data.mapping;
+    if (steps.length === 0)
+        return mesh_1.Mesh.createEmpty(mesh);
+    var vertexCount = (6 * steps.length) / mapping.length;
+    var mb = mesh_builder_1.MeshBuilder.createState(vertexCount, vertexCount / 10, mesh);
+    var it = new util_1.ConfalPyramidsIterator(structure, unit);
+    while (it.hasNext) {
+        var allPoints = it.move();
+        if (!allPoints)
+            continue;
+        for (var _i = 0, allPoints_1 = allPoints; _i < allPoints_1.length; _i++) {
+            var points = allPoints_1[_i];
+            var O3 = points.O3, P = points.P, OP1 = points.OP1, OP2 = points.OP2, O5 = points.O5, confalScore = points.confalScore;
+            var scale = (confalScore - 20.0) / 100.0;
+            // Steps can be drawn in a different order than they are stored.
+            // To make sure that we can get from the drawn pyramid back to the step in represents,
+            // we need to use an appropriate groupId. The stepIdx passed from the iterator
+            // is an index into the array of all steps in the structure.
+            // Since a step is drawn as two "half-pyramids" we need two ids to map to a single step.
+            // To do that, we just multiply the index by 2. idx*2 marks the "upper" half-pyramid,
+            // (idx*2)+1 the "lower" half-pyramid.
+            var groupIdx = points.stepIdx * 2;
+            unit.conformation.invariantPosition(O3, posO3);
+            unit.conformation.invariantPosition(P, posP);
+            unit.conformation.invariantPosition(OP1, posOP1);
+            unit.conformation.invariantPosition(OP2, posOP2);
+            unit.conformation.invariantPosition(O5, posO5);
+            shiftVertex(posO3, posP, scale);
+            shiftVertex(posOP1, posP, scale);
+            shiftVertex(posOP2, posP, scale);
+            shiftVertex(posO5, posP, scale);
+            calcMidpoint(mp, posO3, posO5);
+            mb.currentGroup = groupIdx;
+            var pb = (0, primitive_1.PrimitiveBuilder)(3);
+            /* Upper part (for first residue in step) */
+            pb.add(posO3, posOP1, posOP2);
+            pb.add(posO3, mp, posOP1);
+            pb.add(posO3, posOP2, mp);
+            mesh_builder_1.MeshBuilder.addPrimitive(mb, t, pb.getPrimitive());
+            /* Lower part (for second residue in step) */
+            mb.currentGroup = groupIdx + 1;
+            pb = (0, primitive_1.PrimitiveBuilder)(3);
+            pb.add(mp, posO5, posOP1);
+            pb.add(mp, posOP2, posO5);
+            pb.add(posO5, posOP2, posOP1);
+            mesh_builder_1.MeshBuilder.addPrimitive(mb, t, pb.getPrimitive());
+        }
+    }
+    return mesh_builder_1.MeshBuilder.getMesh(mb);
+}
+function getConfalPyramidLoci(pickingId, structureGroup, id) {
+    var _a, _b;
+    var groupId = pickingId.groupId, objectId = pickingId.objectId, instanceId = pickingId.instanceId;
+    if (objectId !== id)
+        return loci_1.EmptyLoci;
+    var structure = structureGroup.structure;
+    var unit = structureGroup.group.units[instanceId];
+    if (!structure_1.Unit.isAtomic(unit))
+        return loci_1.EmptyLoci;
+    var data = (_b = (_a = property_1.ConfalPyramidsProvider.get(structure.model)) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.data;
+    if (!data)
+        return loci_1.EmptyLoci;
+    var halfPyramidsCount = data.steps.length * 2;
+    if (halfPyramidsCount <= groupId)
+        return loci_1.EmptyLoci;
+    var idx = Math.floor(groupId / 2); // Map groupIndex to a step, see createConfalPyramidsMesh() for full explanation
+    return types_1.ConfalPyramidsTypes.Loci(data.steps, [idx]);
+}
+function eachConfalPyramid(loci, structureGroup, apply) {
+    return false; // TODO: Implement me
+}
+function ConfalPyramidsVisual(materialId) {
+    return (0, units_visual_1.UnitsMeshVisual)({
+        defaultProps: param_definition_1.ParamDefinition.getDefaultValues(ConfalPyramidsMeshParams),
+        createGeometry: createConfalPyramidsMesh,
+        createLocationIterator: createConfalPyramidsIterator,
+        getLoci: getConfalPyramidLoci,
+        eachLocation: eachConfalPyramid,
+        setUpdateState: function (state, newProps, currentProps) {
+        }
+    }, materialId);
+}
+var ConfalPyramidsVisuals = {
+    'confal-pyramids-symbol': function (ctx, getParams) { return (0, representation_2.UnitsRepresentation)('Confal Pyramids Symbol Mesh', ctx, getParams, ConfalPyramidsVisual); },
+};
+exports.ConfalPyramidsParams = tslib_1.__assign({}, units_visual_1.UnitsMeshParams);
+function getConfalPyramidsParams(ctx, structure) {
+    return param_definition_1.ParamDefinition.clone(exports.ConfalPyramidsParams);
+}
+exports.getConfalPyramidsParams = getConfalPyramidsParams;
+function ConfalPyramidsRepresentation(ctx, getParams) {
+    var repr = representation_1.Representation.createMulti('Confal Pyramids', ctx, getParams, representation_2.StructureRepresentationStateBuilder, ConfalPyramidsVisuals);
+    return repr;
+}
+exports.ConfalPyramidsRepresentation = ConfalPyramidsRepresentation;
+exports.ConfalPyramidsRepresentationProvider = (0, representation_2.StructureRepresentationProvider)({
+    name: 'confal-pyramids',
+    label: 'Confal Pyramids',
+    description: 'Displays schematic depiction of conformer classes and confal values',
+    factory: ConfalPyramidsRepresentation,
+    getParams: getConfalPyramidsParams,
+    defaultValues: param_definition_1.ParamDefinition.getDefaultValues(exports.ConfalPyramidsParams),
+    defaultColorTheme: { name: 'confal-pyramids' },
+    defaultSizeTheme: { name: 'uniform' },
+    isApplicable: function (structure) { return structure.models.some(function (m) { return property_2.Dnatco.isApplicable(m); }); },
+    ensureCustomProperties: {
+        attach: function (ctx, structure) { return property_1.ConfalPyramidsProvider.attach(ctx, structure.model, void 0, true); },
+        detach: function (data) { return property_1.ConfalPyramidsProvider.ref(data.model, false); },
+    }
+});

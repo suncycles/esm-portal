@@ -1,0 +1,4 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.assign_clipping_varying = void 0;
+exports.assign_clipping_varying = "\n#if dClipObjectCount != 0 && defined(dClipping)\n    #if defined(dClippingType_instance)\n        vClipping = readFromTexture(tClipping, aInstance, uClippingTexDim).a;\n    #elif defined(dMarkerType_groupInstance)\n        vClipping = readFromTexture(tClipping, aInstance * float(uGroupCount) + group, uClippingTexDim).a;\n    #endif\n#endif\n";

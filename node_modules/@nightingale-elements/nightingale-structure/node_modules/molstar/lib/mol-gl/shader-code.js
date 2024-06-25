@@ -1,0 +1,313 @@
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { idFactory } from '../mol-util/id-factory';
+import { isWebGL2 } from './webgl/compat';
+var shaderCodeId = idFactory();
+import { apply_fog } from './shader/chunks/apply-fog.glsl';
+import { apply_interior_color } from './shader/chunks/apply-interior-color.glsl';
+import { apply_light_color } from './shader/chunks/apply-light-color.glsl';
+import { apply_marker_color } from './shader/chunks/apply-marker-color.glsl';
+import { assign_clipping_varying } from './shader/chunks/assign-clipping-varying.glsl';
+import { assign_color_varying } from './shader/chunks/assign-color-varying.glsl';
+import { assign_group } from './shader/chunks/assign-group.glsl';
+import { assign_marker_varying } from './shader/chunks/assign-marker-varying.glsl';
+import { assign_material_color } from './shader/chunks/assign-material-color.glsl';
+import { assign_position } from './shader/chunks/assign-position.glsl';
+import { assign_size } from './shader/chunks/assign-size.glsl';
+import { check_picking_alpha } from './shader/chunks/check-picking-alpha.glsl';
+import { clip_instance } from './shader/chunks/clip-instance.glsl';
+import { clip_pixel } from './shader/chunks/clip-pixel.glsl';
+import { color_frag_params } from './shader/chunks/color-frag-params.glsl';
+import { color_vert_params } from './shader/chunks/color-vert-params.glsl';
+import { common_clip } from './shader/chunks/common-clip.glsl';
+import { common_frag_params } from './shader/chunks/common-frag-params.glsl';
+import { common_vert_params } from './shader/chunks/common-vert-params.glsl';
+import { common } from './shader/chunks/common.glsl';
+import { float_to_rgba } from './shader/chunks/float-to-rgba.glsl';
+import { light_frag_params } from './shader/chunks/light-frag-params.glsl';
+import { matrix_scale } from './shader/chunks/matrix-scale.glsl';
+import { normal_frag_params } from './shader/chunks/normal-frag-params.glsl';
+import { read_from_texture } from './shader/chunks/read-from-texture.glsl';
+import { rgba_to_float } from './shader/chunks/rgba-to-float.glsl';
+import { size_vert_params } from './shader/chunks/size-vert-params.glsl';
+import { texture3d_from_1d_trilinear } from './shader/chunks/texture3d-from-1d-trilinear.glsl';
+import { texture3d_from_2d_linear } from './shader/chunks/texture3d-from-2d-linear.glsl';
+import { texture3d_from_2d_nearest } from './shader/chunks/texture3d-from-2d-nearest.glsl';
+import { wboit_write } from './shader/chunks/wboit-write.glsl';
+import { dpoit_write } from './shader/chunks/dpoit-write.glsl';
+var ShaderChunks = {
+    apply_fog: apply_fog,
+    apply_interior_color: apply_interior_color,
+    apply_light_color: apply_light_color,
+    apply_marker_color: apply_marker_color,
+    assign_clipping_varying: assign_clipping_varying,
+    assign_color_varying: assign_color_varying,
+    assign_group: assign_group,
+    assign_marker_varying: assign_marker_varying,
+    assign_material_color: assign_material_color,
+    assign_position: assign_position,
+    assign_size: assign_size,
+    check_picking_alpha: check_picking_alpha,
+    clip_instance: clip_instance,
+    clip_pixel: clip_pixel,
+    color_frag_params: color_frag_params,
+    color_vert_params: color_vert_params,
+    common_clip: common_clip,
+    common_frag_params: common_frag_params,
+    common_vert_params: common_vert_params,
+    common: common,
+    float_to_rgba: float_to_rgba,
+    light_frag_params: light_frag_params,
+    matrix_scale: matrix_scale,
+    normal_frag_params: normal_frag_params,
+    read_from_texture: read_from_texture,
+    rgba_to_float: rgba_to_float,
+    size_vert_params: size_vert_params,
+    texture3d_from_1d_trilinear: texture3d_from_1d_trilinear,
+    texture3d_from_2d_linear: texture3d_from_2d_linear,
+    texture3d_from_2d_nearest: texture3d_from_2d_nearest,
+    wboit_write: wboit_write,
+    dpoit_write: dpoit_write
+};
+var reInclude = /^(?!\/\/)\s*#include\s+(\S+)/gm;
+var reUnrollLoop = /#pragma unroll_loop_start\s+for\s*\(\s*int\s+i\s*=\s*(\d+)\s*;\s*i\s*<\s*(\d+)\s*;\s*\+\+i\s*\s*\)\s*{([\s\S]+?)}\s+#pragma unroll_loop_end/g;
+var reSingleLineComment = /[ \t]*\/\/.*\n/g;
+var reMultiLineComment = /[ \t]*\/\*[\s\S]*?\*\//g;
+var reMultipleLinebreaks = /\n{2,}/g;
+function addIncludes(text) {
+    return text
+        .replace(reInclude, function (_, p1) {
+        var chunk = ShaderChunks[p1];
+        if (!chunk)
+            throw new Error("empty chunk, '".concat(p1, "'"));
+        return chunk;
+    })
+        .trim()
+        .replace(reSingleLineComment, '\n')
+        .replace(reMultiLineComment, '\n')
+        .replace(reMultipleLinebreaks, '\n');
+}
+function unrollLoops(str) {
+    return str.replace(reUnrollLoop, loopReplacer);
+}
+function loopReplacer(match, start, end, snippet) {
+    var out = '';
+    for (var i = parseInt(start); i < parseInt(end); ++i) {
+        out += snippet
+            .replace(/\[\s*i\s*\]/g, "[".concat(i, "]"))
+            .replace(/UNROLLED_LOOP_INDEX/g, "".concat(i));
+    }
+    return out;
+}
+function replaceCounts(str, defines) {
+    if (defines.dLightCount)
+        str = str.replace(/dLightCount/g, "".concat(defines.dLightCount.ref.value));
+    if (defines.dClipObjectCount)
+        str = str.replace(/dClipObjectCount/g, "".concat(defines.dClipObjectCount.ref.value));
+    return str;
+}
+function preprocess(str, defines) {
+    return unrollLoops(replaceCounts(str, defines));
+}
+export function ShaderCode(name, vert, frag, extensions, outTypes, ignoreDefine) {
+    if (extensions === void 0) { extensions = {}; }
+    if (outTypes === void 0) { outTypes = {}; }
+    return { id: shaderCodeId(), name: name, vert: addIncludes(vert), frag: addIncludes(frag), extensions: extensions, outTypes: outTypes, ignoreDefine: ignoreDefine };
+}
+// Note: `drawBuffers` need to be 'optional' for wboit
+function ignoreDefine(name, variant, defines) {
+    var _a;
+    if (variant.startsWith('color')) {
+        if (name === 'dLightCount') {
+            return !!((_a = defines.dIgnoreLight) === null || _a === void 0 ? void 0 : _a.ref.value);
+        }
+    }
+    else {
+        return [
+            'dColorType', 'dUsePalette',
+            'dLightCount',
+            'dOverpaintType', 'dOverpaint',
+            'dSubstanceType', 'dSubstance',
+        ].includes(name);
+    }
+    return false;
+}
+;
+function ignoreDefineUnlit(name, variant, defines) {
+    if (name === 'dLightCount')
+        return true;
+    return ignoreDefine(name, variant, defines);
+}
+;
+import { points_vert } from './shader/points.vert';
+import { points_frag } from './shader/points.frag';
+export var PointsShaderCode = ShaderCode('points', points_vert, points_frag, { drawBuffers: 'optional' }, {}, ignoreDefineUnlit);
+import { spheres_vert } from './shader/spheres.vert';
+import { spheres_frag } from './shader/spheres.frag';
+export var SpheresShaderCode = ShaderCode('spheres', spheres_vert, spheres_frag, { fragDepth: 'required', drawBuffers: 'optional' }, {}, ignoreDefine);
+import { cylinders_vert } from './shader/cylinders.vert';
+import { cylinders_frag } from './shader/cylinders.frag';
+export var CylindersShaderCode = ShaderCode('cylinders', cylinders_vert, cylinders_frag, { fragDepth: 'required', drawBuffers: 'optional' }, {}, ignoreDefine);
+import { text_vert } from './shader/text.vert';
+import { text_frag } from './shader/text.frag';
+export var TextShaderCode = ShaderCode('text', text_vert, text_frag, { drawBuffers: 'optional' }, {}, ignoreDefineUnlit);
+import { lines_vert } from './shader/lines.vert';
+import { lines_frag } from './shader/lines.frag';
+export var LinesShaderCode = ShaderCode('lines', lines_vert, lines_frag, { drawBuffers: 'optional' }, {}, ignoreDefineUnlit);
+import { mesh_vert } from './shader/mesh.vert';
+import { mesh_frag } from './shader/mesh.frag';
+export var MeshShaderCode = ShaderCode('mesh', mesh_vert, mesh_frag, { drawBuffers: 'optional' }, {}, ignoreDefine);
+import { directVolume_vert } from './shader/direct-volume.vert';
+import { directVolume_frag } from './shader/direct-volume.frag';
+export var DirectVolumeShaderCode = ShaderCode('direct-volume', directVolume_vert, directVolume_frag, { fragDepth: 'optional', drawBuffers: 'optional' }, {}, ignoreDefine);
+import { image_vert } from './shader/image.vert';
+import { image_frag } from './shader/image.frag';
+import { assertUnreachable } from '../mol-util/type-helpers';
+export var ImageShaderCode = ShaderCode('image', image_vert, image_frag, { drawBuffers: 'optional' }, {}, ignoreDefineUnlit);
+function getDefinesCode(defines, ignore) {
+    var _a;
+    if (defines === undefined)
+        return '';
+    var variant = (((_a = defines.dRenderVariant) === null || _a === void 0 ? void 0 : _a.ref.value) || '');
+    var lines = [];
+    for (var name_1 in defines) {
+        if (ignore === null || ignore === void 0 ? void 0 : ignore(name_1, variant, defines))
+            continue;
+        var define = defines[name_1];
+        var v = define.ref.value;
+        if (v !== undefined) {
+            if (typeof v === 'string') {
+                lines.push("#define ".concat(name_1, "_").concat(v));
+            }
+            else if (typeof v === 'number') {
+                lines.push("#define ".concat(name_1, " ").concat(v));
+            }
+            else if (typeof v === 'boolean') {
+                if (v)
+                    lines.push("#define ".concat(name_1));
+            }
+            else {
+                assertUnreachable(v);
+            }
+        }
+    }
+    return lines.join('\n') + '\n';
+}
+function getGlsl100VertPrefix(extensions, shaderExtensions) {
+    var prefix = [];
+    if (shaderExtensions.drawBuffers) {
+        if (extensions.drawBuffers) {
+            prefix.push('#define requiredDrawBuffers');
+        }
+        else if (shaderExtensions.drawBuffers === 'required') {
+            throw new Error("required 'GL_EXT_draw_buffers' extension not available");
+        }
+    }
+    return prefix.join('\n') + '\n';
+}
+function getGlsl100FragPrefix(extensions, shaderExtensions) {
+    var prefix = [
+        '#extension GL_OES_standard_derivatives : enable'
+    ];
+    if (shaderExtensions.fragDepth) {
+        if (extensions.fragDepth) {
+            prefix.push('#extension GL_EXT_frag_depth : enable');
+            prefix.push('#define enabledFragDepth');
+        }
+        else if (shaderExtensions.fragDepth === 'required') {
+            throw new Error("required 'GL_EXT_frag_depth' extension not available");
+        }
+    }
+    if (shaderExtensions.drawBuffers) {
+        if (extensions.drawBuffers) {
+            prefix.push('#extension GL_EXT_draw_buffers : require');
+            prefix.push('#define requiredDrawBuffers');
+            prefix.push('#define gl_FragColor gl_FragData[0]');
+        }
+        else if (shaderExtensions.drawBuffers === 'required') {
+            throw new Error("required 'GL_EXT_draw_buffers' extension not available");
+        }
+    }
+    if (shaderExtensions.shaderTextureLod) {
+        if (extensions.shaderTextureLod) {
+            prefix.push('#extension GL_EXT_shader_texture_lod : enable');
+            prefix.push('#define enabledShaderTextureLod');
+        }
+        else if (shaderExtensions.shaderTextureLod === 'required') {
+            throw new Error("required 'GL_EXT_shader_texture_lod' extension not available");
+        }
+    }
+    if (extensions.depthTexture) {
+        prefix.push('#define depthTextureSupport');
+    }
+    return prefix.join('\n') + '\n';
+}
+var glsl300VertPrefixCommon = "\n#define attribute in\n#define varying out\n#define texture2D texture\n";
+var glsl300FragPrefixCommon = "\n#define varying in\n#define texture2D texture\n#define textureCube texture\n#define texture2DLodEXT textureLod\n#define textureCubeLodEXT textureLod\n\n#define gl_FragColor out_FragData0\n#define gl_FragDepthEXT gl_FragDepth\n\n#define depthTextureSupport\n";
+function getGlsl300VertPrefix(extensions, shaderExtensions) {
+    var prefix = [
+        '#version 300 es',
+    ];
+    if (shaderExtensions.drawBuffers) {
+        if (extensions.drawBuffers) {
+            prefix.push('#define requiredDrawBuffers');
+        }
+    }
+    if (extensions.noNonInstancedActiveAttribs) {
+        prefix.push('#define noNonInstancedActiveAttribs');
+    }
+    prefix.push(glsl300VertPrefixCommon);
+    return prefix.join('\n') + '\n';
+}
+function getGlsl300FragPrefix(gl, extensions, shaderExtensions, outTypes) {
+    var prefix = [
+        '#version 300 es',
+        "layout(location = 0) out highp ".concat(outTypes[0] || 'vec4', " out_FragData0;")
+    ];
+    if (shaderExtensions.fragDepth) {
+        if (extensions.fragDepth) {
+            prefix.push('#define enabledFragDepth');
+        }
+    }
+    if (shaderExtensions.drawBuffers) {
+        if (extensions.drawBuffers) {
+            prefix.push('#define requiredDrawBuffers');
+            var maxDrawBuffers = gl.getParameter(gl.MAX_DRAW_BUFFERS);
+            for (var i = 1, il = maxDrawBuffers; i < il; ++i) {
+                prefix.push("layout(location = ".concat(i, ") out highp ").concat(outTypes[i] || 'vec4', " out_FragData").concat(i, ";"));
+            }
+        }
+    }
+    if (shaderExtensions.shaderTextureLod) {
+        if (extensions.shaderTextureLod) {
+            prefix.push('#define enabledShaderTextureLod');
+        }
+    }
+    prefix.push(glsl300FragPrefixCommon);
+    return prefix.join('\n') + '\n';
+}
+function transformGlsl300Frag(frag) {
+    return frag.replace(/gl_FragData\[([0-9]+)\]/g, 'out_FragData$1');
+}
+export function addShaderDefines(gl, extensions, defines, shaders) {
+    var vertHeader = getDefinesCode(defines, shaders.ignoreDefine);
+    var fragHeader = getDefinesCode(defines, shaders.ignoreDefine);
+    var vertPrefix = isWebGL2(gl)
+        ? getGlsl300VertPrefix(extensions, shaders.extensions)
+        : getGlsl100VertPrefix(extensions, shaders.extensions);
+    var fragPrefix = isWebGL2(gl)
+        ? getGlsl300FragPrefix(gl, extensions, shaders.extensions, shaders.outTypes)
+        : getGlsl100FragPrefix(extensions, shaders.extensions);
+    var frag = isWebGL2(gl) ? transformGlsl300Frag(shaders.frag) : shaders.frag;
+    return {
+        id: shaderCodeId(),
+        name: shaders.name,
+        vert: "".concat(vertPrefix).concat(vertHeader).concat(preprocess(shaders.vert, defines)),
+        frag: "".concat(fragPrefix).concat(fragHeader).concat(preprocess(frag, defines)),
+        extensions: shaders.extensions,
+        outTypes: shaders.outTypes
+    };
+}

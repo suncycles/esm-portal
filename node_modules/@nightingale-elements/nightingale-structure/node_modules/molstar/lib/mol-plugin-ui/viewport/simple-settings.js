@@ -1,0 +1,170 @@
+import { __assign, __awaiter, __extends, __generator } from "tslib";
+import { jsx as _jsx, Fragment as _Fragment, jsxs as _jsxs } from "react/jsx-runtime";
+/**
+ * Copyright (c) 2019-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+import { produce } from 'immer';
+import { throttleTime } from 'rxjs';
+import { Canvas3DParams } from '../../mol-canvas3d/canvas3d';
+import { PluginCommands } from '../../mol-plugin/commands';
+import { PluginConfig } from '../../mol-plugin/config';
+import { StateTransform } from '../../mol-state';
+import { Color } from '../../mol-util/color';
+import { deepClone } from '../../mol-util/object';
+import { ParamDefinition as PD } from '../../mol-util/param-definition';
+import { ParamMapping } from '../../mol-util/param-mapping';
+import { PluginUIComponent } from '../base';
+import { ParameterMappingControl } from '../controls/parameters';
+import { ViewportHelpContent } from './help';
+var SimpleSettingsControl = /** @class */ (function (_super) {
+    __extends(SimpleSettingsControl, _super);
+    function SimpleSettingsControl() {
+        return _super !== null && _super.apply(this, arguments) || this;
+    }
+    SimpleSettingsControl.prototype.componentDidMount = function () {
+        var _this = this;
+        if (!this.plugin.canvas3d)
+            return;
+        this.subscribe(this.plugin.events.canvas3d.settingsUpdated, function () { return _this.forceUpdate(); });
+        this.subscribe(this.plugin.canvas3d.camera.stateChanged.pipe(throttleTime(500, undefined, { leading: true, trailing: true })), function (state) {
+            if (state.radiusMax !== undefined || state.radius !== undefined) {
+                _this.forceUpdate();
+            }
+        });
+    };
+    SimpleSettingsControl.prototype.render = function () {
+        if (!this.plugin.canvas3d)
+            return null;
+        return _jsxs(_Fragment, { children: [_jsx(ParameterMappingControl, { mapping: SimpleSettingsMapping }), _jsx(ViewportHelpContent, {})] });
+    };
+    return SimpleSettingsControl;
+}(PluginUIComponent));
+export { SimpleSettingsControl };
+var LayoutOptions = {
+    'sequence': 'Sequence',
+    'log': 'Log',
+    'left': 'Left Panel'
+};
+var SimpleSettingsParams = {
+    animate: Canvas3DParams.trackball.params.animate,
+    camera: Canvas3DParams.camera,
+    background: PD.Group({
+        color: PD.Color(Color(0xFCFBF9), { label: 'Background', description: 'Custom background color' }),
+        transparent: PD.Boolean(false),
+        style: Canvas3DParams.postprocessing.params.background,
+    }, { pivot: 'color' }),
+    lighting: PD.Group({
+        occlusion: Canvas3DParams.postprocessing.params.occlusion,
+        shadow: Canvas3DParams.postprocessing.params.shadow,
+        outline: Canvas3DParams.postprocessing.params.outline,
+        fog: Canvas3DParams.cameraFog,
+    }, { isFlat: true }),
+    clipping: PD.Group(__assign({}, Canvas3DParams.cameraClipping.params), { pivot: 'radius' }),
+    layout: PD.MultiSelect([], PD.objectToOptions(LayoutOptions)),
+};
+var SimpleSettingsMapping = ParamMapping({
+    params: function (ctx) {
+        var _a;
+        var params = PD.clone(SimpleSettingsParams);
+        var controls = (_a = ctx.spec.components) === null || _a === void 0 ? void 0 : _a.controls;
+        if (controls) {
+            var options = [];
+            if (controls.top !== 'none')
+                options.push(['sequence', LayoutOptions.sequence]);
+            if (controls.bottom !== 'none')
+                options.push(['log', LayoutOptions.log]);
+            if (controls.left !== 'none')
+                options.push(['left', LayoutOptions.left]);
+            params.layout.options = options;
+        }
+        var bgStyles = ctx.config.get(PluginConfig.Background.Styles) || [];
+        if (bgStyles.length > 0) {
+            Object.assign(params.background.params.style, {
+                presets: deepClone(bgStyles),
+                isFlat: false, // so the presets menu is shown
+            });
+        }
+        return params;
+    },
+    target: function (ctx) {
+        var _a, _b;
+        var c = (_a = ctx.spec.components) === null || _a === void 0 ? void 0 : _a.controls;
+        var r = ctx.layout.state.regionState;
+        var layout = [];
+        if (r.top !== 'hidden' && (!c || c.top !== 'none'))
+            layout.push('sequence');
+        if (r.bottom !== 'hidden' && (!c || c.bottom !== 'none'))
+            layout.push('log');
+        if (r.left !== 'hidden' && (!c || c.left !== 'none'))
+            layout.push('left');
+        return { canvas: (_b = ctx.canvas3d) === null || _b === void 0 ? void 0 : _b.props, layout: layout };
+    }
+})({
+    values: function (props, ctx) {
+        var canvas = props.canvas;
+        var renderer = canvas.renderer;
+        return {
+            layout: props.layout,
+            animate: canvas.trackball.animate,
+            camera: canvas.camera,
+            background: {
+                color: renderer.backgroundColor,
+                transparent: canvas.transparentBackground,
+                style: canvas.postprocessing.background,
+            },
+            lighting: {
+                occlusion: canvas.postprocessing.occlusion,
+                shadow: canvas.postprocessing.shadow,
+                outline: canvas.postprocessing.outline,
+                fog: canvas.cameraFog,
+            },
+            clipping: __assign({}, canvas.cameraClipping)
+        };
+    },
+    update: function (s, props) {
+        var canvas = props.canvas;
+        canvas.trackball.animate = s.animate;
+        canvas.camera = s.camera;
+        canvas.transparentBackground = s.background.transparent;
+        canvas.renderer.backgroundColor = s.background.color;
+        canvas.postprocessing.occlusion = s.lighting.occlusion;
+        canvas.postprocessing.shadow = s.lighting.shadow;
+        canvas.postprocessing.outline = s.lighting.outline;
+        canvas.postprocessing.background = s.background.style;
+        canvas.cameraFog = s.lighting.fog;
+        canvas.cameraClipping = {
+            radius: s.clipping.radius,
+            far: s.clipping.far,
+            minNear: s.clipping.minNear,
+        };
+        props.layout = s.layout;
+    },
+    apply: function (props, ctx) {
+        return __awaiter(this, void 0, void 0, function () {
+            var hideLeft, state;
+            return __generator(this, function (_a) {
+                switch (_a.label) {
+                    case 0: return [4 /*yield*/, PluginCommands.Canvas3D.SetSettings(ctx, { settings: props.canvas })];
+                    case 1:
+                        _a.sent();
+                        hideLeft = props.layout.indexOf('left') < 0;
+                        state = produce(ctx.layout.state, function (s) {
+                            s.regionState.top = props.layout.indexOf('sequence') >= 0 ? 'full' : 'hidden';
+                            s.regionState.bottom = props.layout.indexOf('log') >= 0 ? 'full' : 'hidden';
+                            s.regionState.left = hideLeft ? 'hidden' : ctx.behaviors.layout.leftPanelTabName.value === 'none' ? 'collapsed' : 'full';
+                        });
+                        return [4 /*yield*/, PluginCommands.Layout.Update(ctx, { state: state })];
+                    case 2:
+                        _a.sent();
+                        if (hideLeft) {
+                            PluginCommands.State.SetCurrentObject(ctx, { state: ctx.state.data, ref: StateTransform.RootRef });
+                        }
+                        return [2 /*return*/];
+                }
+            });
+        });
+    }
+});

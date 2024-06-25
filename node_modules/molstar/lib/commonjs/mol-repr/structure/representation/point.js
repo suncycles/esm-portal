@@ -1,0 +1,38 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.PointRepresentationProvider = exports.PointRepresentation = exports.getPointParams = exports.PointParams = void 0;
+const element_point_1 = require("../visual/element-point");
+const units_representation_1 = require("../units-representation");
+const param_definition_1 = require("../../../mol-util/param-definition");
+const representation_1 = require("../representation");
+const representation_2 = require("../../../mol-repr/representation");
+const PointVisuals = {
+    'element-point': (ctx, getParams) => (0, units_representation_1.UnitsRepresentation)('Points', ctx, getParams, element_point_1.ElementPointVisual),
+};
+exports.PointParams = {
+    ...element_point_1.ElementPointParams,
+};
+function getPointParams(ctx, structure) {
+    return exports.PointParams;
+}
+exports.getPointParams = getPointParams;
+function PointRepresentation(ctx, getParams) {
+    return representation_2.Representation.createMulti('Point', ctx, getParams, representation_1.StructureRepresentationStateBuilder, PointVisuals);
+}
+exports.PointRepresentation = PointRepresentation;
+exports.PointRepresentationProvider = (0, representation_1.StructureRepresentationProvider)({
+    name: 'point',
+    label: 'Point',
+    description: 'Displays elements (atoms, coarse spheres) as points.',
+    factory: PointRepresentation,
+    getParams: getPointParams,
+    defaultValues: param_definition_1.ParamDefinition.getDefaultValues(exports.PointParams),
+    defaultColorTheme: { name: 'element-symbol' },
+    defaultSizeTheme: { name: 'uniform' },
+    isApplicable: (structure) => structure.elementCount > 0
+});

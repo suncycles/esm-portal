@@ -1,0 +1,35 @@
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { ValueCell } from '../mol-util';
+import { idFactory } from '../mol-util/id-factory';
+import { clamp } from '../mol-math/interpolate';
+var getNextRenderableId = idFactory();
+export function createRenderable(renderItem, values, state) {
+    return {
+        id: getNextRenderableId(),
+        materialId: renderItem.materialId,
+        values: values,
+        state: state,
+        render: function (variant, sharedTexturesCount) {
+            if (values.uAlpha && values.alpha) {
+                ValueCell.updateIfChanged(values.uAlpha, clamp(values.alpha.ref.value * state.alphaFactor, 0, 1));
+            }
+            renderItem.render(variant, sharedTexturesCount);
+        },
+        getProgram: function (variant) { return renderItem.getProgram(variant); },
+        update: function () { return renderItem.update(); },
+        dispose: function () { return renderItem.destroy(); }
+    };
+}
+export function createComputeRenderable(renderItem, values) {
+    return {
+        id: getNextRenderableId(),
+        values: values,
+        render: function () { return renderItem.render('compute', 0); },
+        update: function () { return renderItem.update(); },
+        dispose: function () { return renderItem.destroy(); }
+    };
+}

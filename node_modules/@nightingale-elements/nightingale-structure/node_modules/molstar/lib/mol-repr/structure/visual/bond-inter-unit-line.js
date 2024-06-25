@@ -1,0 +1,137 @@
+/**
+ * Copyright (c) 2020-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { __assign } from "tslib";
+import { ParamDefinition as PD } from '../../../mol-util/param-definition';
+import { StructureElement, Bond } from '../../../mol-model/structure';
+import { Vec3 } from '../../../mol-math/linear-algebra';
+import { BitFlags, arrayEqual } from '../../../mol-util';
+import { createLinkLines } from './util/link';
+import { ComplexLinesVisual, ComplexLinesParams } from '../complex-visual';
+import { BondType } from '../../../mol-model/structure/model/types';
+import { BondIterator, getInterBondLoci, eachInterBond, BondLineParams, makeInterBondIgnoreTest } from './util/bond';
+import { Lines } from '../../../mol-geo/geometry/lines/lines';
+import { Sphere3D } from '../../../mol-math/geometry';
+var tmpRefPosBondIt = new Bond.ElementBondIterator();
+function setRefPosition(pos, structure, unit, index) {
+    tmpRefPosBondIt.setElement(structure, unit, index);
+    while (tmpRefPosBondIt.hasNext) {
+        var bA = tmpRefPosBondIt.move();
+        bA.otherUnit.conformation.position(bA.otherUnit.elements[bA.otherIndex], pos);
+        return pos;
+    }
+    return null;
+}
+function createInterUnitBondLines(ctx, structure, theme, props, lines) {
+    var bonds = structure.interUnitBonds;
+    var edgeCount = bonds.edgeCount, edges = bonds.edges;
+    if (!edgeCount)
+        return Lines.createEmpty(lines);
+    var sizeFactor = props.sizeFactor, aromaticBonds = props.aromaticBonds, multipleBonds = props.multipleBonds;
+    var mbOff = multipleBonds === 'off';
+    var mbSymmetric = multipleBonds === 'symmetric';
+    var ref = Vec3();
+    var loc = StructureElement.Location.create();
+    var builderProps = {
+        linkCount: edgeCount,
+        referencePosition: function (edgeIndex) {
+            var b = edges[edgeIndex];
+            var unitA, unitB;
+            var indexA, indexB;
+            if (b.unitA < b.unitB) {
+                unitA = structure.unitMap.get(b.unitA);
+                unitB = structure.unitMap.get(b.unitB);
+                indexA = b.indexA;
+                indexB = b.indexB;
+            }
+            else if (b.unitA > b.unitB) {
+                unitA = structure.unitMap.get(b.unitB);
+                unitB = structure.unitMap.get(b.unitA);
+                indexA = b.indexB;
+                indexB = b.indexA;
+            }
+            else {
+                throw new Error('same units in createInterUnitBondLines');
+            }
+            return setRefPosition(ref, structure, unitA, indexA) || setRefPosition(ref, structure, unitB, indexB);
+        },
+        position: function (posA, posB, edgeIndex) {
+            var b = edges[edgeIndex];
+            var uA = structure.unitMap.get(b.unitA);
+            var uB = structure.unitMap.get(b.unitB);
+            uA.conformation.position(uA.elements[b.indexA], posA);
+            uB.conformation.position(uB.elements[b.indexB], posB);
+        },
+        style: function (edgeIndex) {
+            var o = edges[edgeIndex].props.order;
+            var f = BitFlags.create(edges[edgeIndex].props.flag);
+            if (BondType.is(f, 2 /* BondType.Flag.MetallicCoordination */) || BondType.is(f, 4 /* BondType.Flag.HydrogenBond */)) {
+                // show metallic coordinations and hydrogen bonds with dashed cylinders
+                return 1 /* LinkStyle.Dashed */;
+            }
+            else if (o === 3) {
+                return mbOff ? 0 /* LinkStyle.Solid */ :
+                    mbSymmetric ? 4 /* LinkStyle.Triple */ :
+                        5 /* LinkStyle.OffsetTriple */;
+            }
+            else if (aromaticBonds && BondType.is(f, 16 /* BondType.Flag.Aromatic */)) {
+                return 7 /* LinkStyle.Aromatic */;
+            }
+            return (o !== 2 || mbOff) ? 0 /* LinkStyle.Solid */ :
+                mbSymmetric ? 2 /* LinkStyle.Double */ :
+                    3 /* LinkStyle.OffsetDouble */;
+        },
+        radius: function (edgeIndex) {
+            var b = edges[edgeIndex];
+            loc.structure = structure;
+            loc.unit = structure.unitMap.get(b.unitA);
+            loc.element = loc.unit.elements[b.indexA];
+            var sizeA = theme.size.size(loc);
+            loc.unit = structure.unitMap.get(b.unitB);
+            loc.element = loc.unit.elements[b.indexB];
+            var sizeB = theme.size.size(loc);
+            return Math.min(sizeA, sizeB) * sizeFactor;
+        },
+        ignore: makeInterBondIgnoreTest(structure, props)
+    };
+    var _a = createLinkLines(ctx, builderProps, props, lines), l = _a.lines, boundingSphere = _a.boundingSphere;
+    if (boundingSphere) {
+        l.setBoundingSphere(boundingSphere);
+    }
+    else if (l.lineCount > 0) {
+        var child = structure.child;
+        var sphere = Sphere3D.expand(Sphere3D(), (child !== null && child !== void 0 ? child : structure).boundary.sphere, 1 * sizeFactor);
+        l.setBoundingSphere(sphere);
+    }
+    return l;
+}
+export var InterUnitBondLineParams = __assign(__assign(__assign({}, ComplexLinesParams), BondLineParams), { includeParent: PD.Boolean(false) });
+export function InterUnitBondLineVisual(materialId) {
+    return ComplexLinesVisual({
+        defaultProps: PD.getDefaultValues(InterUnitBondLineParams),
+        createGeometry: createInterUnitBondLines,
+        createLocationIterator: BondIterator.fromStructure,
+        getLoci: getInterBondLoci,
+        eachLocation: eachInterBond,
+        setUpdateState: function (state, newProps, currentProps, newTheme, currentTheme, newStructure, currentStructure) {
+            state.createGeometry = (newProps.sizeFactor !== currentProps.sizeFactor ||
+                newProps.linkScale !== currentProps.linkScale ||
+                newProps.linkSpacing !== currentProps.linkSpacing ||
+                newProps.aromaticDashCount !== currentProps.aromaticDashCount ||
+                newProps.dashCount !== currentProps.dashCount ||
+                newProps.ignoreHydrogens !== currentProps.ignoreHydrogens ||
+                newProps.ignoreHydrogensVariant !== currentProps.ignoreHydrogensVariant ||
+                !arrayEqual(newProps.includeTypes, currentProps.includeTypes) ||
+                !arrayEqual(newProps.excludeTypes, currentProps.excludeTypes) ||
+                newProps.multipleBonds !== currentProps.multipleBonds);
+            if (newStructure.interUnitBonds !== currentStructure.interUnitBonds) {
+                state.createGeometry = true;
+                state.updateTransform = true;
+                state.updateColor = true;
+                state.updateSize = true;
+            }
+        }
+    }, materialId);
+}

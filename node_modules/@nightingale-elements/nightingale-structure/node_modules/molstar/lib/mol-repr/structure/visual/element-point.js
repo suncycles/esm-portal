@@ -1,0 +1,78 @@
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { __assign } from "tslib";
+import { ParamDefinition as PD } from '../../../mol-util/param-definition';
+import { UnitsPointsParams, UnitsPointsVisual } from '../units-visual';
+import { Points } from '../../../mol-geo/geometry/points/points';
+import { PointsBuilder } from '../../../mol-geo/geometry/points/points-builder';
+import { Vec3 } from '../../../mol-math/linear-algebra';
+import { ElementIterator, getElementLoci, eachElement, makeElementIgnoreTest } from './util/element';
+import { Sphere3D } from '../../../mol-math/geometry';
+// avoiding namespace lookup improved performance in Chrome (Aug 2020)
+var v3add = Vec3.add;
+export var ElementPointParams = __assign(__assign({}, UnitsPointsParams), { pointSizeAttenuation: PD.Boolean(false), ignoreHydrogens: PD.Boolean(false), ignoreHydrogensVariant: PD.Select('all', PD.arrayToOptions(['all', 'non-polar'])), traceOnly: PD.Boolean(false) });
+// TODO size
+export function createElementPoint(ctx, unit, structure, theme, props, points) {
+    // TODO sizeFactor
+    var child = structure.child;
+    if (child && !child.unitMap.get(unit.id))
+        return Points.createEmpty(points);
+    var elements = unit.elements;
+    var n = elements.length;
+    var builder = PointsBuilder.create(n, n / 10, points);
+    var p = Vec3();
+    var pos = unit.conformation.invariantPosition;
+    var ignore = makeElementIgnoreTest(structure, unit, props);
+    var center = Vec3();
+    var count = 0;
+    if (ignore) {
+        for (var i = 0; i < n; ++i) {
+            if (ignore(elements[i]))
+                continue;
+            pos(elements[i], p);
+            v3add(center, center, p);
+            count += 1;
+            builder.add(p[0], p[1], p[2], i);
+        }
+    }
+    else {
+        for (var i = 0; i < n; ++i) {
+            pos(elements[i], p);
+            v3add(center, center, p);
+            count += 1;
+            builder.add(p[0], p[1], p[2], i);
+        }
+    }
+    var oldBoundingSphere = points ? Sphere3D.clone(points.boundingSphere) : undefined;
+    var pt = builder.getPoints();
+    if (count === 0)
+        return pt;
+    // re-use boundingSphere if it has not changed much
+    var boundingSphere;
+    Vec3.scale(center, center, 1 / count);
+    if (oldBoundingSphere && Vec3.distance(center, oldBoundingSphere.center) / oldBoundingSphere.radius < 1.0) {
+        boundingSphere = oldBoundingSphere;
+    }
+    else {
+        boundingSphere = Sphere3D.expand(Sphere3D(), unit.boundary.sphere, 1 * props.sizeFactor);
+    }
+    pt.setBoundingSphere(boundingSphere);
+    return pt;
+}
+export function ElementPointVisual(materialId) {
+    return UnitsPointsVisual({
+        defaultProps: PD.getDefaultValues(ElementPointParams),
+        createGeometry: createElementPoint,
+        createLocationIterator: ElementIterator.fromGroup,
+        getLoci: getElementLoci,
+        eachLocation: eachElement,
+        setUpdateState: function (state, newProps, currentProps) {
+            state.createGeometry = (newProps.ignoreHydrogens !== currentProps.ignoreHydrogens ||
+                newProps.ignoreHydrogensVariant !== currentProps.ignoreHydrogensVariant ||
+                newProps.traceOnly !== currentProps.traceOnly);
+        }
+    }, materialId);
+}

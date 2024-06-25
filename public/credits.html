@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESM PORTAL - Credits</title>
+    <link rel="stylesheet" href="./css/styles.css">
+</head>
+<h1>
+    <div class="navbar">
+        <a href="index.html">Home</a>
+        <div class="dropdown">
+        <button class="dropbtn" onclick="drop()"> About
+        <i class="fa fa-caret-down"></i>
+        </button>
+        <div class="dropdown-content" id="myDropdown">
+        <a href="research.html">Some info about the paper and research</a>
+        <a href="credits.html">Citations?</a>
+        </div>
+        </div> 
+    </div>
+      
+</h1>
+<body>  
+    Some Text
+    <!--Nav Bar-->
+    <script>
+        function drop() {
+        document.getElementById("myDropdown").classList.toggle("show");
+        }
+        
+        window.onclick = function(e) {
+        if (!e.target.matches('.dropbtn')) {
+        var myDropdown = document.getElementById("myDropdown");
+            if (myDropdown.classList.contains('show')) {
+            myDropdown.classList.remove('show');
+            }
+        }
+        }
+    </script>    
+</body>
+</html>

@@ -1,0 +1,131 @@
+/**
+ * Copyright (c) 2017-2020 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { __assign } from "tslib";
+import { Column, Table } from '../../../mol-data/db';
+import { EntitySubtype } from '../../../mol-model/structure/model/properties/common';
+import { getEntityType, getEntitySubtype } from '../../../mol-model/structure/model/types';
+import { BasicSchema } from './schema';
+export function getEntityData(data) {
+    var entityData;
+    if (!data.entity.id.isDefined) {
+        var entityIds_1 = new Set();
+        var ids = [];
+        var types = [];
+        var _a = data.atom_site, label_entity_id = _a.label_entity_id, label_comp_id = _a.label_comp_id;
+        for (var i = 0, il = data.atom_site._rowCount; i < il; i++) {
+            var entityId = label_entity_id.value(i);
+            if (!entityIds_1.has(entityId)) {
+                ids.push(entityId);
+                types.push(getEntityType(label_comp_id.value(i)));
+                entityIds_1.add(entityId);
+            }
+        }
+        var sphere_entity_id = data.ihm_sphere_obj_site.entity_id;
+        for (var i = 0, il = data.ihm_sphere_obj_site._rowCount; i < il; i++) {
+            var entityId = sphere_entity_id.value(i);
+            if (!entityIds_1.has(entityId)) {
+                ids.push(entityId);
+                types.push('polymer');
+                entityIds_1.add(entityId);
+            }
+        }
+        var gaussian_entity_id = data.ihm_gaussian_obj_site.entity_id;
+        for (var i = 0, il = data.ihm_gaussian_obj_site._rowCount; i < il; i++) {
+            var entityId = gaussian_entity_id.value(i);
+            if (!entityIds_1.has(entityId)) {
+                ids.push(entityId);
+                types.push('polymer');
+                entityIds_1.add(entityId);
+            }
+        }
+        entityData = Table.ofPartialColumns(BasicSchema.entity, {
+            id: Column.ofArray({ array: ids, schema: BasicSchema.entity.id }),
+            type: Column.ofArray({ array: types, schema: BasicSchema.entity.type }),
+        }, ids.length);
+    }
+    else {
+        entityData = data.entity;
+    }
+    var getEntityIndex = Column.createIndexer(entityData.id);
+    //
+    var subtypes = new Array(entityData._rowCount);
+    subtypes.fill('other');
+    var entityIds = new Set();
+    var assignSubtype = false;
+    if (data.entity_poly && data.entity_poly.type.isDefined) {
+        var _b = data.entity_poly, entity_id = _b.entity_id, type = _b.type, _rowCount = _b._rowCount;
+        for (var i = 0; i < _rowCount; ++i) {
+            var entityId = entity_id.value(i);
+            subtypes[getEntityIndex(entityId)] = type.value(i);
+            entityIds.add(entityId);
+        }
+    }
+    else {
+        assignSubtype = true;
+    }
+    if (data.pdbx_entity_branch && data.pdbx_entity_branch.entity_id.isDefined) {
+        var _c = data.pdbx_entity_branch, entity_id = _c.entity_id, type = _c.type, _rowCount = _c._rowCount;
+        for (var i = 0; i < _rowCount; ++i) {
+            var entityId = entity_id.value(i);
+            subtypes[getEntityIndex(entityId)] = type.value(i);
+            entityIds.add(entityId);
+        }
+    }
+    else {
+        assignSubtype = true;
+    }
+    if (entityIds.size < subtypes.length) {
+        // still unassigned subtypes, need to derive from component id/type
+        assignSubtype = true;
+    }
+    if (assignSubtype) {
+        var chemCompType = new Map();
+        if (data.chem_comp) {
+            var _d = data.chem_comp, id = _d.id, type = _d.type;
+            for (var i = 0, il = data.chem_comp._rowCount; i < il; i++) {
+                chemCompType.set(id.value(i), type.value(i));
+            }
+        }
+        if (data.atom_site) {
+            var _e = data.atom_site, label_entity_id = _e.label_entity_id, label_comp_id = _e.label_comp_id;
+            for (var i = 0, il = data.atom_site._rowCount; i < il; i++) {
+                var entityId = label_entity_id.value(i);
+                if (!entityIds.has(entityId)) {
+                    var compId = label_comp_id.value(i);
+                    var compType = chemCompType.get(compId) || 'other';
+                    subtypes[getEntityIndex(entityId)] = getEntitySubtype(compId, compType);
+                    entityIds.add(entityId);
+                }
+            }
+        }
+        // TODO how to handle coarse?
+    }
+    var subtypeColumn = Column.ofArray({ array: subtypes, schema: EntitySubtype });
+    return {
+        data: entityData,
+        subtype: subtypeColumn,
+        getEntityIndex: getEntityIndex
+    };
+}
+export function getEntitiesWithPRD(data, entities, structAsymMap) {
+    var _a;
+    if (!data.pdbx_molecule || !data.pdbx_molecule.prd_id.isDefined) {
+        return entities;
+    }
+    var prdIds = new Array(entities.data._rowCount);
+    prdIds.fill('');
+    var _b = data.pdbx_molecule, asym_id = _b.asym_id, prd_id = _b.prd_id, _rowCount = _b._rowCount;
+    for (var i = 0; i < _rowCount; ++i) {
+        var asymId = asym_id.value(i);
+        var entityId = (_a = structAsymMap.get(asymId)) === null || _a === void 0 ? void 0 : _a.entity_id;
+        if (entityId !== undefined) {
+            prdIds[entities.getEntityIndex(entityId)] = prd_id.value(i);
+        }
+    }
+    var prdIdColumn = Column.ofArray({ array: prdIds, schema: Column.Schema.str });
+    return __assign(__assign({}, entities), { prd_id: prdIdColumn });
+}

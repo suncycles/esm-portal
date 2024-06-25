@@ -1,0 +1,44 @@
+/**
+ * Copyright (c) 2017-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ * @author Panagiotis Tourlas <panagiot_tourlov@hotmail.com>
+ *
+ * Adapted from MolQL project
+ */
+import { __spreadArray } from "tslib";
+import { properties } from './properties';
+import { operators } from './operators';
+import { keywords } from './keywords';
+import { functions } from './functions';
+export var Properties = [];
+for (var name_1 in properties) {
+    if (properties[name_1].isUnsupported)
+        continue;
+    Properties.push(name_1);
+    if (properties[name_1].abbr)
+        Properties.push.apply(Properties, properties[name_1].abbr);
+}
+export var Operators = [];
+operators.forEach(function (o) {
+    if (o.isUnsupported)
+        return;
+    Operators.push(o.name);
+    if (o.abbr)
+        Operators.push.apply(Operators, o.abbr);
+});
+export var Keywords = [];
+for (var name_2 in keywords) {
+    if (!keywords[name_2].map)
+        continue;
+    Keywords.push(name_2);
+    if (keywords[name_2].abbr)
+        Keywords.push.apply(Keywords, keywords[name_2].abbr);
+}
+export var Functions = [];
+for (var name_3 in functions) {
+    if (!functions[name_3].map)
+        continue;
+    Functions.push(name_3);
+}
+export var all = { Properties: Properties, Operators: __spreadArray(__spreadArray([], Operators, true), Functions, true), Keywords: Keywords };

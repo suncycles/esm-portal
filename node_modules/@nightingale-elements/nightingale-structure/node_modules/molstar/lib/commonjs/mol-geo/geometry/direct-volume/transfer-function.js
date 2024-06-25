@@ -1,0 +1,60 @@
+"use strict";
+/**
+ * Copyright (c) 2018-2021 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createTransferFunctionTexture = exports.getControlPointsFromVec2Array = exports.getControlPointsFromString = void 0;
+var tslib_1 = require("tslib");
+var interpolate_1 = require("../../../mol-math/interpolate");
+var mol_util_1 = require("../../../mol-util");
+function getControlPointsFromString(s) {
+    return s.split(/\s*,\s*/).map(function (p) {
+        var ps = p.split(/\s*:\s*/);
+        return { x: parseFloat(ps[0]), alpha: parseFloat(ps[1]) };
+    });
+}
+exports.getControlPointsFromString = getControlPointsFromString;
+function getControlPointsFromVec2Array(array) {
+    return array.map(function (v) { return ({ x: v[0], alpha: v[1] }); });
+}
+exports.getControlPointsFromVec2Array = getControlPointsFromVec2Array;
+function createTransferFunctionTexture(controlPoints, texture) {
+    var cp = tslib_1.__spreadArray(tslib_1.__spreadArray([
+        { x: 0, alpha: 0 },
+        { x: 0, alpha: 0 }
+    ], controlPoints, true), [
+        { x: 1, alpha: 0 },
+        { x: 1, alpha: 0 },
+    ], false);
+    var n = 256;
+    var array = texture ? texture.ref.value.array : new Uint8Array(n);
+    var k = 0;
+    var x1, x2;
+    var a0, a1, a2, a3;
+    var il = controlPoints.length + 1;
+    for (var i = 0; i < il; ++i) {
+        x1 = cp[i + 1].x;
+        x2 = cp[i + 2].x;
+        a0 = cp[i].alpha;
+        a1 = cp[i + 1].alpha;
+        a2 = cp[i + 2].alpha;
+        a3 = cp[i + 3].alpha;
+        var jl = Math.round((x2 - x1) * n);
+        for (var j = 0; j < jl; ++j) {
+            var t = j / jl;
+            array[k] = Math.max(0, (0, interpolate_1.spline)(a0, a1, a2, a3, t, 0.5) * 255);
+            ++k;
+        }
+    }
+    var textureImage = { array: array, width: 256, height: 1 };
+    if (texture) {
+        mol_util_1.ValueCell.update(texture, textureImage);
+        return texture;
+    }
+    else {
+        return mol_util_1.ValueCell.create(textureImage);
+    }
+}
+exports.createTransferFunctionTexture = createTransferFunctionTexture;

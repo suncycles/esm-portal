@@ -1,0 +1,24 @@
+/**
+ * Copyright (c) 2022-2023 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { CollapsableControls, PurePluginUIComponent } from '../base';
+import { MagicWandSvg } from '../controls/icons';
+export declare class StructureQuickStylesControls extends CollapsableControls {
+    defaultState(): {
+        isCollapsed: boolean;
+        header: string;
+        brand: {
+            accent: "gray";
+            svg: typeof MagicWandSvg;
+        };
+    };
+    renderControls(): import("react/jsx-runtime").JSX.Element;
+}
+export declare class QuickStyles extends PurePluginUIComponent {
+    default(): Promise<void>;
+    illustrative(): Promise<void>;
+    stylized(): Promise<void>;
+    render(): import("react/jsx-runtime").JSX.Element;
+}

@@ -1,0 +1,168 @@
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { __assign } from "tslib";
+import { idFactory } from '../../mol-util/id-factory';
+import { assertUnreachable } from '../../mol-util/type-helpers';
+import { isWebGL2 } from './compat';
+var getNextBufferId = idFactory();
+export function getUsageHint(gl, usageHint) {
+    switch (usageHint) {
+        case 'static': return gl.STATIC_DRAW;
+        case 'dynamic': return gl.DYNAMIC_DRAW;
+        case 'stream': return gl.STREAM_DRAW;
+    }
+}
+export function getDataType(gl, dataType) {
+    switch (dataType) {
+        case 'uint8': return gl.UNSIGNED_BYTE;
+        case 'int8': return gl.BYTE;
+        case 'uint16': return gl.UNSIGNED_SHORT;
+        case 'int16': return gl.SHORT;
+        case 'uint32': return gl.UNSIGNED_INT;
+        case 'int32': return gl.INT;
+        case 'float32': return gl.FLOAT;
+        default: assertUnreachable(dataType);
+    }
+}
+function dataTypeFromArray(gl, array) {
+    if (array instanceof Uint8Array) {
+        return gl.UNSIGNED_BYTE;
+    }
+    else if (array instanceof Int8Array) {
+        return gl.BYTE;
+    }
+    else if (array instanceof Uint16Array) {
+        return gl.UNSIGNED_SHORT;
+    }
+    else if (array instanceof Int16Array) {
+        return gl.SHORT;
+    }
+    else if (array instanceof Uint32Array) {
+        return gl.UNSIGNED_INT;
+    }
+    else if (array instanceof Int32Array) {
+        return gl.INT;
+    }
+    else if (array instanceof Float32Array) {
+        return gl.FLOAT;
+    }
+    assertUnreachable(array);
+}
+export function getBufferType(gl, bufferType) {
+    switch (bufferType) {
+        case 'attribute': return gl.ARRAY_BUFFER;
+        case 'elements': return gl.ELEMENT_ARRAY_BUFFER;
+        case 'uniform':
+            if (isWebGL2(gl)) {
+                return gl.UNIFORM_BUFFER;
+            }
+            else {
+                throw new Error('WebGL2 is required for uniform buffers');
+            }
+    }
+}
+function getBuffer(gl) {
+    var buffer = gl.createBuffer();
+    if (buffer === null) {
+        throw new Error('Could not create WebGL buffer');
+    }
+    return buffer;
+}
+function createBuffer(gl, array, usageHint, bufferType) {
+    var _buffer = getBuffer(gl);
+    var _usageHint = getUsageHint(gl, usageHint);
+    var _bufferType = getBufferType(gl, bufferType);
+    var _dataType = dataTypeFromArray(gl, array);
+    var _bpe = array.BYTES_PER_ELEMENT;
+    var _length = array.length;
+    function updateData(array) {
+        gl.bindBuffer(_bufferType, _buffer);
+        gl.bufferData(_bufferType, array, _usageHint);
+    }
+    updateData(array);
+    var destroyed = false;
+    return {
+        id: getNextBufferId(),
+        _usageHint: _usageHint,
+        _bufferType: _bufferType,
+        _dataType: _dataType,
+        _bpe: _bpe,
+        length: _length,
+        getBuffer: function () { return _buffer; },
+        updateData: updateData,
+        updateSubData: function (array, offset, count) {
+            gl.bindBuffer(_bufferType, _buffer);
+            if (count - offset === array.length) {
+                gl.bufferSubData(_bufferType, 0, array);
+            }
+            else {
+                gl.bufferSubData(_bufferType, offset * _bpe, array.subarray(offset, offset + count));
+            }
+        },
+        reset: function () {
+            _buffer = getBuffer(gl);
+            updateData(array);
+        },
+        destroy: function () {
+            if (destroyed)
+                return;
+            gl.deleteBuffer(_buffer);
+            destroyed = true;
+        }
+    };
+}
+export function getAttribType(gl, kind, itemSize) {
+    switch (kind) {
+        case 'float32':
+            switch (itemSize) {
+                case 1: return gl.FLOAT;
+                case 2: return gl.FLOAT_VEC2;
+                case 3: return gl.FLOAT_VEC3;
+                case 4: return gl.FLOAT_VEC4;
+                case 16: return gl.FLOAT_MAT4;
+            }
+        default:
+            assertUnreachable(kind);
+    }
+}
+export function createAttributeBuffer(gl, state, extensions, array, itemSize, divisor, usageHint) {
+    if (usageHint === void 0) { usageHint = 'dynamic'; }
+    var instancedArrays = extensions.instancedArrays;
+    var buffer = createBuffer(gl, array, usageHint, 'attribute');
+    var _bufferType = buffer._bufferType, _dataType = buffer._dataType, _bpe = buffer._bpe;
+    return __assign(__assign({}, buffer), { bind: function (location) {
+            gl.bindBuffer(_bufferType, buffer.getBuffer());
+            if (itemSize === 16) {
+                for (var i = 0; i < 4; ++i) {
+                    state.enableVertexAttrib(location + i);
+                    gl.vertexAttribPointer(location + i, 4, _dataType, false, 4 * 4 * _bpe, i * 4 * _bpe);
+                    instancedArrays.vertexAttribDivisor(location + i, divisor);
+                }
+            }
+            else {
+                state.enableVertexAttrib(location);
+                gl.vertexAttribPointer(location, itemSize, _dataType, false, 0, 0);
+                instancedArrays.vertexAttribDivisor(location, divisor);
+            }
+        } });
+}
+export function createAttributeBuffers(ctx, schema, values) {
+    var buffers = [];
+    Object.keys(schema).forEach(function (k) {
+        var spec = schema[k];
+        if (spec.type === 'attribute') {
+            buffers[buffers.length] = [k, ctx.resources.attribute(values[k].ref.value, spec.itemSize, spec.divisor)];
+        }
+    });
+    return buffers;
+}
+export function createElementsBuffer(gl, array, usageHint) {
+    if (usageHint === void 0) { usageHint = 'static'; }
+    var buffer = createBuffer(gl, array, usageHint, 'elements');
+    return __assign(__assign({}, buffer), { bind: function () {
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer.getBuffer());
+        } });
+}

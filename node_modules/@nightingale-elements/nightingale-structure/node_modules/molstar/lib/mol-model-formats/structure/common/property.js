@@ -1,0 +1,76 @@
+/**
+ * Copyright (c) 2020-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+var FormatRegistry = /** @class */ (function () {
+    function FormatRegistry() {
+        this.map = new Map();
+        this.applicable = new Map();
+    }
+    FormatRegistry.prototype.add = function (kind, obtain, applicable) {
+        this.map.set(kind, obtain);
+        if (applicable)
+            this.applicable.set(kind, applicable);
+    };
+    FormatRegistry.prototype.remove = function (kind) {
+        this.map.delete(kind);
+        this.applicable.delete(kind);
+    };
+    FormatRegistry.prototype.get = function (kind) {
+        return this.map.get(kind);
+    };
+    FormatRegistry.prototype.isApplicable = function (model) {
+        if (!this.map.has(model.sourceData.kind))
+            return false;
+        var isApplicable = this.applicable.get(model.sourceData.kind);
+        return isApplicable ? isApplicable(model) : true;
+    };
+    return FormatRegistry;
+}());
+export { FormatPropertyProvider };
+var FormatPropertyProvider;
+(function (FormatPropertyProvider) {
+    function create(descriptor, options) {
+        var name = descriptor.name;
+        var formatRegistry = new FormatRegistry();
+        return {
+            descriptor: descriptor,
+            formatRegistry: formatRegistry,
+            isApplicable: function (model) {
+                return formatRegistry.isApplicable(model);
+            },
+            get: function (model) {
+                var store = (options === null || options === void 0 ? void 0 : options.asDynamic) ? model._dynamicPropertyData : model._staticPropertyData;
+                if (store[name])
+                    return store[name];
+                if (model.customProperties.has(descriptor))
+                    return;
+                var obtain = formatRegistry.get(model.sourceData.kind);
+                if (!obtain)
+                    return;
+                store[name] = obtain(model);
+                model.customProperties.add(descriptor);
+                return store[name];
+            },
+            set: function (model, value) {
+                if (options === null || options === void 0 ? void 0 : options.asDynamic) {
+                    model._dynamicPropertyData[name] = value;
+                }
+                else {
+                    model._staticPropertyData[name] = value;
+                }
+            },
+            delete: function (model) {
+                if (options === null || options === void 0 ? void 0 : options.asDynamic) {
+                    delete model._dynamicPropertyData[name];
+                }
+                else {
+                    delete model._staticPropertyData[name];
+                }
+            }
+        };
+    }
+    FormatPropertyProvider.create = create;
+})(FormatPropertyProvider || (FormatPropertyProvider = {}));

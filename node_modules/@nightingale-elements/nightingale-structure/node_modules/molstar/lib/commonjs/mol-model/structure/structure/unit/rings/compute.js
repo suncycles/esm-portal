@@ -1,0 +1,363 @@
+"use strict";
+/**
+ * Copyright (c) 2018 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.createIndex = exports.getFingerprint = exports.computeRings = void 0;
+var int_1 = require("../../../../../mol-data/int");
+var graph_1 = require("../../../../../mol-math/graph");
+var types_1 = require("../../../model/types");
+var util_1 = require("../../../../../mol-data/util");
+var array_1 = require("../../../../../mol-util/array");
+function computeRings(unit) {
+    var size = largestResidue(unit);
+    var state = State(unit, size);
+    var residuesIt = int_1.Segmentation.transientSegments(unit.model.atomicHierarchy.residueAtomSegments, unit.elements);
+    while (residuesIt.hasNext) {
+        var seg = residuesIt.move();
+        processResidue(state, seg.start, seg.end);
+    }
+    return state.rings;
+}
+exports.computeRings = computeRings;
+function State(unit, capacity) {
+    return {
+        startVertex: 0,
+        endVertex: 0,
+        count: 0,
+        isRingAtom: new Int32Array(capacity),
+        marked: new Int32Array(capacity),
+        queue: new Int32Array(capacity),
+        pred: new Int32Array(capacity),
+        depth: new Int32Array(capacity),
+        left: new Int32Array(5 /* Constants.MaxDepth */),
+        right: new Int32Array(5 /* Constants.MaxDepth */),
+        color: new Int32Array(capacity),
+        currentColor: 0,
+        currentAltLoc: '',
+        hasAltLoc: false,
+        rings: [],
+        currentRings: [],
+        unit: unit,
+        bonds: unit.bonds,
+        altLoc: unit.model.atomicHierarchy.atoms.label_alt_id
+    };
+}
+function resetState(state) {
+    state.count = state.endVertex - state.startVertex;
+    var isRingAtom = state.isRingAtom, pred = state.pred, color = state.color, depth = state.depth, marked = state.marked;
+    for (var i = 0; i < state.count; i++) {
+        isRingAtom[i] = 0;
+        pred[i] = -1;
+        marked[i] = -1;
+        color[i] = 0;
+        depth[i] = 0;
+    }
+    state.currentColor = 0;
+    state.currentAltLoc = '';
+    state.hasAltLoc = false;
+}
+function resetDepth(state) {
+    var depth = state.depth;
+    for (var i = 0; i < state.count; i++) {
+        depth[i] = state.count + 1;
+    }
+}
+function largestResidue(unit) {
+    var residuesIt = int_1.Segmentation.transientSegments(unit.model.atomicHierarchy.residueAtomSegments, unit.elements);
+    var size = 0;
+    while (residuesIt.hasNext) {
+        var seg = residuesIt.move();
+        size = Math.max(size, seg.end - seg.start);
+    }
+    return size;
+}
+function isStartIndex(state, i) {
+    var bondOffset = state.bonds.offset;
+    var a = state.startVertex + i;
+    var bStart = bondOffset[a], bEnd = bondOffset[a + 1];
+    var bondCount = bEnd - bStart;
+    if (bondCount <= 1 || (state.isRingAtom[i] && bondCount === 2))
+        return false;
+    return true;
+}
+function processResidue(state, start, end) {
+    state.startVertex = start;
+    state.endVertex = end;
+    // no two atom rings
+    if (state.endVertex - state.startVertex < 3)
+        return;
+    state.currentRings = [];
+    var elements = state.unit.elements;
+    var altLocs = [];
+    for (var i = state.startVertex; i < state.endVertex; i++) {
+        var altLoc = state.altLoc.value(elements[i]);
+        (0, array_1.arraySetAdd)(altLocs, altLoc);
+    }
+    (0, array_1.arraySetRemove)(altLocs, '');
+    var mark = 1;
+    if (altLocs.length === 0) {
+        resetState(state);
+        for (var i = 0; i < state.count; i++) {
+            if (!isStartIndex(state, i))
+                continue;
+            resetDepth(state);
+            mark = findRings(state, i, mark);
+        }
+    }
+    else {
+        for (var aI = 0; aI < altLocs.length; aI++) {
+            resetState(state);
+            state.hasAltLoc = true;
+            state.currentAltLoc = altLocs[aI];
+            for (var i = 0; i < state.count; i++) {
+                if (!isStartIndex(state, i))
+                    continue;
+                var altLoc = state.altLoc.value(elements[state.startVertex + i]);
+                if (altLoc && altLoc !== state.currentAltLoc) {
+                    continue;
+                }
+                resetDepth(state);
+                mark = findRings(state, i, mark);
+            }
+        }
+    }
+    for (var i = 0, _i = state.currentRings.length; i < _i; i++) {
+        state.rings.push(state.currentRings[i]);
+    }
+}
+function addRing(state, a, b, isRingAtom) {
+    // only "monotonous" rings
+    if (b < a) {
+        return false;
+    }
+    var pred = state.pred, color = state.color, left = state.left, right = state.right;
+    var nc = ++state.currentColor;
+    var current = a;
+    for (var t = 0; t < 5 /* Constants.MaxDepth */; t++) {
+        color[current] = nc;
+        current = pred[current];
+        if (current < 0)
+            break;
+    }
+    var leftOffset = 0, rightOffset = 0;
+    var found = false, target = 0;
+    current = b;
+    for (var t = 0; t < 5 /* Constants.MaxDepth */; t++) {
+        if (color[current] === nc) {
+            target = current;
+            found = true;
+            break;
+        }
+        right[rightOffset++] = current;
+        current = pred[current];
+        if (current < 0)
+            break;
+    }
+    if (!found) {
+        return false;
+    }
+    current = a;
+    for (var t = 0; t < 5 /* Constants.MaxDepth */; t++) {
+        left[leftOffset++] = current;
+        if (target === current)
+            break;
+        current = pred[current];
+        if (current < 0)
+            break;
+    }
+    var len = leftOffset + rightOffset;
+    // rings must have at least three elements
+    if (len < 3) {
+        return false;
+    }
+    var ring = new Int32Array(len);
+    var ringOffset = 0;
+    for (var t = 0; t < leftOffset; t++) {
+        ring[ringOffset++] = state.startVertex + left[t];
+        isRingAtom[left[t]] = 1;
+    }
+    for (var t = rightOffset - 1; t >= 0; t--) {
+        ring[ringOffset++] = state.startVertex + right[t];
+        isRingAtom[right[t]] = 1;
+    }
+    (0, util_1.sortArray)(ring);
+    // Check if the ring is unique and another one is not it's subset
+    for (var rI = 0, _rI = state.currentRings.length; rI < _rI; rI++) {
+        var r = state.currentRings[rI];
+        if (ring.length === r.length) {
+            if (int_1.SortedArray.areEqual(ring, r))
+                return false;
+        }
+        else if (ring.length > r.length) {
+            if (int_1.SortedArray.isSubset(ring, r))
+                return false;
+        }
+    }
+    state.currentRings.push(int_1.SortedArray.ofSortedArray(ring));
+    return true;
+}
+function findRings(state, from, mark) {
+    var bonds = state.bonds, startVertex = state.startVertex, endVertex = state.endVertex, isRingAtom = state.isRingAtom, marked = state.marked, queue = state.queue, pred = state.pred, depth = state.depth;
+    var elements = state.unit.elements;
+    var neighbor = bonds.b, bondFlags = bonds.edgeProps.flags, offset = bonds.offset;
+    marked[from] = mark;
+    depth[from] = 0;
+    queue[0] = from;
+    var head = 0, size = 1;
+    while (head < size) {
+        var top_1 = queue[head++];
+        var d = depth[top_1];
+        var a = startVertex + top_1;
+        var start = offset[a], end = offset[a + 1];
+        for (var i = start; i < end; i++) {
+            var b = neighbor[i];
+            if (b < startVertex || b >= endVertex || !types_1.BondType.isCovalent(bondFlags[i]))
+                continue;
+            if (state.hasAltLoc) {
+                var altLoc = state.altLoc.value(elements[b]);
+                if (altLoc && state.currentAltLoc !== altLoc) {
+                    continue;
+                }
+            }
+            var other = b - startVertex;
+            if (marked[other] === mark) {
+                if (pred[other] !== top_1 && pred[top_1] !== other) {
+                    if (addRing(state, top_1, other, isRingAtom)) {
+                        return mark + 1;
+                    }
+                }
+                continue;
+            }
+            var newDepth = Math.min(depth[other], d + 1);
+            if (newDepth > 5 /* Constants.MaxDepth */)
+                continue;
+            depth[other] = newDepth;
+            marked[other] = mark;
+            queue[size++] = other;
+            pred[other] = top_1;
+        }
+    }
+    return mark + 1;
+}
+function getFingerprint(elements) {
+    var len = elements.length;
+    var reversed = new Array(len);
+    for (var i = 0; i < len; i++)
+        reversed[i] = elements[len - i - 1];
+    var rotNormal = getMinimalRotation(elements);
+    var rotReversed = getMinimalRotation(reversed);
+    var isNormalSmaller = false;
+    for (var i = 0; i < len; i++) {
+        var u = elements[(i + rotNormal) % len], v = reversed[(i + rotReversed) % len];
+        if (u !== v) {
+            isNormalSmaller = u < v;
+            break;
+        }
+    }
+    if (isNormalSmaller)
+        return buildFinderprint(elements, rotNormal);
+    return buildFinderprint(reversed, rotReversed);
+}
+exports.getFingerprint = getFingerprint;
+function getMinimalRotation(elements) {
+    // adapted from http://en.wikipedia.org/wiki/Lexicographically_minimal_string_rotation
+    var len = elements.length;
+    var f = new Int32Array(len * 2);
+    for (var i = 0; i < f.length; i++)
+        f[i] = -1;
+    var u = '', v = '', k = 0;
+    for (var j = 1; j < f.length; j++) {
+        var i = f[j - k - 1];
+        while (i !== -1) {
+            u = elements[j % len];
+            v = elements[(k + i + 1) % len];
+            if (u === v)
+                break;
+            if (u < v)
+                k = j - i - 1;
+            i = f[i];
+        }
+        if (i === -1) {
+            u = elements[j % len];
+            v = elements[(k + i + 1) % len];
+            if (u !== v) {
+                if (u < v)
+                    k = j;
+                f[j - k] = -1;
+            }
+            else
+                f[j - k] = i + 1;
+        }
+        else
+            f[j - k] = i + 1;
+    }
+    return k;
+}
+function buildFinderprint(elements, offset) {
+    var len = elements.length;
+    var ret = [];
+    var i;
+    for (i = 0; i < len - 1; i++) {
+        ret.push(elements[(i + offset) % len]);
+        ret.push('-');
+    }
+    ret.push(elements[(i + offset) % len]);
+    return ret.join('');
+}
+function createIndex(rings, aromaticRings) {
+    var elementRingIndices = new Map();
+    var elementAromaticRingIndices = new Map();
+    // for each ring atom, assign all rings that it is present in
+    for (var rI = 0, _rI = rings.length; rI < _rI; rI++) {
+        var r = rings[rI];
+        for (var i = 0, _i = r.length; i < _i; i++) {
+            var e = r[i];
+            if (elementRingIndices.has(e))
+                elementRingIndices.get(e).push(rI);
+            else
+                elementRingIndices.set(e, [rI]);
+        }
+    }
+    // for each ring atom, assign all aromatic rings that it is present in
+    for (var aI = 0, _aI = aromaticRings.length; aI < _aI; aI++) {
+        var rI = aromaticRings[aI];
+        var r = rings[rI];
+        for (var i = 0, _i = r.length; i < _i; i++) {
+            var e = r[i];
+            if (elementAromaticRingIndices.has(e))
+                elementAromaticRingIndices.get(e).push(rI);
+            else
+                elementAromaticRingIndices.set(e, [rI]);
+        }
+    }
+    // create a graph where vertices are rings, edge if two rings share at least one atom
+    var graph = new graph_1.IntAdjacencyGraph.UniqueEdgeBuilder(rings.length);
+    for (var rI = 0, _rI = rings.length; rI < _rI; rI++) {
+        var r = rings[rI];
+        for (var i = 0, _i = r.length; i < _i; i++) {
+            var e = r[i];
+            var containedRings = elementRingIndices.get(e);
+            if (containedRings.length === 1)
+                continue;
+            for (var j = 0, _j = containedRings.length; j < _j; j++) {
+                var rJ = containedRings[j];
+                if (rI >= rJ)
+                    continue;
+                graph.addEdge(rI, rJ);
+            }
+        }
+    }
+    var components = graph_1.IntAdjacencyGraph.connectedComponents(graph.getGraph());
+    var ringComponentIndex = components.componentIndex;
+    var ringComponents = [];
+    for (var i = 0; i < components.componentCount; i++)
+        ringComponents[i] = [];
+    for (var rI = 0, _rI = rings.length; rI < _rI; rI++) {
+        ringComponents[ringComponentIndex[rI]].push(rI);
+    }
+    return { elementRingIndices: elementRingIndices, elementAromaticRingIndices: elementAromaticRingIndices, ringComponentIndex: ringComponentIndex, ringComponents: ringComponents };
+}
+exports.createIndex = createIndex;

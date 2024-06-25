@@ -1,0 +1,4 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.clip_instance = void 0;
+exports.clip_instance = "\n#if defined(dClipVariant_instance) && dClipObjectCount != 0\n    vec4 mCenter = uModel * aTransform * vec4(uInvariantBoundingSphere.xyz, 1.0);\n    if (clipTest(vec4(mCenter.xyz, uInvariantBoundingSphere.w)))\n        // move out of [ -w, +w ] to 'discard' in vert shader\n        gl_Position.z = 2.0 * gl_Position.w;\n#endif\n";

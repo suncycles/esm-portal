@@ -1,0 +1,124 @@
+/**
+ * Copyright (c) 2018-2023 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { getInstancedArrays, getStandardDerivatives, getElementIndexUint, getTextureFloat, getTextureFloatLinear, getBlendMinMax, getFragDepth, getColorBufferFloat, getDrawBuffers, getShaderTextureLod, getDepthTexture, getSRGB, getTextureHalfFloat, getTextureHalfFloatLinear, getColorBufferHalfFloat, getVertexArrayObject, getDisjointTimerQuery, getNoNonInstancedActiveAttribs, getDrawBuffersIndexed, getParallelShaderCompile, getFboRenderMipmap, getProvokingVertex } from './compat';
+import { isDebugMode } from '../../mol-util/debug';
+export function createExtensions(gl) {
+    var instancedArrays = getInstancedArrays(gl);
+    if (instancedArrays === null) {
+        throw new Error('Could not find support for "instanced_arrays"');
+    }
+    var elementIndexUint = getElementIndexUint(gl);
+    if (elementIndexUint === null) {
+        throw new Error('Could not find support for "element_index_uint"');
+    }
+    var standardDerivatives = getStandardDerivatives(gl);
+    if (standardDerivatives === null) {
+        throw new Error('Could not find support for "standard_derivatives"');
+    }
+    var textureFloat = getTextureFloat(gl);
+    if (isDebugMode && textureFloat === null) {
+        console.log('Could not find support for "texture_float"');
+    }
+    var textureFloatLinear = getTextureFloatLinear(gl);
+    if (isDebugMode && textureFloatLinear === null) {
+        // TODO handle non-support downstream (no gpu gaussian calc, no gpu mc???)
+        // - can't be a required extension because it is not supported by `headless-gl`
+        console.log('Could not find support for "texture_float_linear"');
+    }
+    var textureHalfFloat = getTextureHalfFloat(gl);
+    if (isDebugMode && textureHalfFloat === null) {
+        console.log('Could not find support for "texture_half_float"');
+    }
+    var textureHalfFloatLinear = getTextureHalfFloatLinear(gl);
+    if (isDebugMode && textureHalfFloatLinear === null) {
+        // TODO handle non-support downstream (no gpu gaussian calc, no gpu mc???)
+        // - can't be a required extension because it is not supported by `headless-gl`
+        console.log('Could not find support for "texture_half_float_linear"');
+    }
+    var depthTexture = getDepthTexture(gl);
+    if (isDebugMode && depthTexture === null) {
+        console.log('Could not find support for "depth_texture"');
+    }
+    var blendMinMax = getBlendMinMax(gl);
+    if (isDebugMode && blendMinMax === null) {
+        // TODO handle non-support downstream (e.g. no gpu gaussian calc)
+        // - can't be a required extension because it is not supported by `headless-gl`
+        console.log('Could not find support for "blend_minmax"');
+    }
+    var vertexArrayObject = getVertexArrayObject(gl);
+    if (isDebugMode && vertexArrayObject === null) {
+        console.log('Could not find support for "vertex_array_object"');
+    }
+    var fragDepth = getFragDepth(gl);
+    if (isDebugMode && fragDepth === null) {
+        console.log('Could not find support for "frag_depth"');
+    }
+    var colorBufferFloat = getColorBufferFloat(gl);
+    if (isDebugMode && colorBufferFloat === null) {
+        console.log('Could not find support for "color_buffer_float"');
+    }
+    var colorBufferHalfFloat = getColorBufferHalfFloat(gl);
+    if (isDebugMode && colorBufferHalfFloat === null) {
+        console.log('Could not find support for "color_buffer_half_float"');
+    }
+    var drawBuffers = getDrawBuffers(gl);
+    if (isDebugMode && drawBuffers === null) {
+        console.log('Could not find support for "draw_buffers"');
+    }
+    var drawBuffersIndexed = getDrawBuffersIndexed(gl);
+    if (isDebugMode && drawBuffersIndexed === null) {
+        console.log('Could not find support for "draw_buffers_indexed"');
+    }
+    var shaderTextureLod = getShaderTextureLod(gl);
+    if (isDebugMode && shaderTextureLod === null) {
+        console.log('Could not find support for "shader_texture_lod"');
+    }
+    var sRGB = getSRGB(gl);
+    if (isDebugMode && sRGB === null) {
+        console.log('Could not find support for "sRGB"');
+    }
+    var disjointTimerQuery = getDisjointTimerQuery(gl);
+    if (isDebugMode && disjointTimerQuery === null) {
+        console.log('Could not find support for "disjoint_timer_query"');
+    }
+    var parallelShaderCompile = getParallelShaderCompile(gl);
+    if (isDebugMode && parallelShaderCompile === null) {
+        console.log('Could not find support for "parallel_shader_compile"');
+    }
+    var fboRenderMipmap = getFboRenderMipmap(gl);
+    if (isDebugMode && fboRenderMipmap === null) {
+        console.log('Could not find support for "fbo_render_mipmap"');
+    }
+    var provokingVertex = getProvokingVertex(gl);
+    if (isDebugMode && provokingVertex === null) {
+        console.log('Could not find support for "provoking_vertex"');
+    }
+    var noNonInstancedActiveAttribs = getNoNonInstancedActiveAttribs(gl);
+    return {
+        instancedArrays: instancedArrays,
+        standardDerivatives: standardDerivatives,
+        elementIndexUint: elementIndexUint,
+        textureFloat: textureFloat,
+        textureFloatLinear: textureFloatLinear,
+        textureHalfFloat: textureHalfFloat,
+        textureHalfFloatLinear: textureHalfFloatLinear,
+        depthTexture: depthTexture,
+        blendMinMax: blendMinMax,
+        vertexArrayObject: vertexArrayObject,
+        fragDepth: fragDepth,
+        colorBufferFloat: colorBufferFloat,
+        colorBufferHalfFloat: colorBufferHalfFloat,
+        drawBuffers: drawBuffers,
+        drawBuffersIndexed: drawBuffersIndexed,
+        shaderTextureLod: shaderTextureLod,
+        sRGB: sRGB,
+        disjointTimerQuery: disjointTimerQuery,
+        parallelShaderCompile: parallelShaderCompile,
+        fboRenderMipmap: fboRenderMipmap,
+        provokingVertex: provokingVertex,
+        noNonInstancedActiveAttribs: noNonInstancedActiveAttribs,
+    };
+}

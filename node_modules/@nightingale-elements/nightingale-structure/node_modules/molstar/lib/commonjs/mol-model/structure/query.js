@@ -1,0 +1,30 @@
+"use strict";
+/**
+ * Copyright (c) 2017 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author David Sehnal <david.sehnal@gmail.com>
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.StructureQuery = exports.StructureSelection = exports.Queries = void 0;
+var tslib_1 = require("tslib");
+var selection_1 = require("./query/selection");
+Object.defineProperty(exports, "StructureSelection", { enumerable: true, get: function () { return selection_1.StructureSelection; } });
+var query_1 = require("./query/query");
+Object.defineProperty(exports, "StructureQuery", { enumerable: true, get: function () { return query_1.StructureQuery; } });
+tslib_1.__exportStar(require("./query/context"), exports);
+var generators = tslib_1.__importStar(require("./query/queries/generators"));
+var modifiers = tslib_1.__importStar(require("./query/queries/modifiers"));
+var filters = tslib_1.__importStar(require("./query/queries/filters"));
+var combinators = tslib_1.__importStar(require("./query/queries/combinators"));
+var internal = tslib_1.__importStar(require("./query/queries/internal"));
+var atomset = tslib_1.__importStar(require("./query/queries/atom-set"));
+var predicates_1 = require("./query/predicates");
+exports.Queries = {
+    generators: generators,
+    filters: filters,
+    modifiers: modifiers,
+    combinators: combinators,
+    pred: predicates_1.Predicates,
+    internal: internal,
+    atomset: atomset
+};

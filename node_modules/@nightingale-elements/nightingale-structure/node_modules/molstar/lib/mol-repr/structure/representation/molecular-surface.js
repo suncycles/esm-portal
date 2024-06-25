@@ -1,0 +1,36 @@
+/**
+ * Copyright (c) 2018-2022 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ */
+import { __assign } from "tslib";
+import { MolecularSurfaceMeshVisual, MolecularSurfaceMeshParams, StructureMolecularSurfaceMeshVisual } from '../visual/molecular-surface-mesh';
+import { UnitsRepresentation } from '../units-representation';
+import { ParamDefinition as PD } from '../../../mol-util/param-definition';
+import { ComplexRepresentation, StructureRepresentationProvider, StructureRepresentationStateBuilder } from '../representation';
+import { Representation } from '../../../mol-repr/representation';
+import { MolecularSurfaceWireframeParams, MolecularSurfaceWireframeVisual } from '../visual/molecular-surface-wireframe';
+import { BaseGeometry } from '../../../mol-geo/geometry/base';
+var MolecularSurfaceVisuals = {
+    'molecular-surface-mesh': function (ctx, getParams) { return UnitsRepresentation('Molecular surface mesh', ctx, getParams, MolecularSurfaceMeshVisual); },
+    'structure-molecular-surface-mesh': function (ctx, getParams) { return ComplexRepresentation('Structure Molecular surface mesh', ctx, getParams, StructureMolecularSurfaceMeshVisual); },
+    'molecular-surface-wireframe': function (ctx, getParams) { return UnitsRepresentation('Molecular surface wireframe', ctx, getParams, MolecularSurfaceWireframeVisual); },
+};
+export var MolecularSurfaceParams = __assign(__assign(__assign({}, MolecularSurfaceMeshParams), MolecularSurfaceWireframeParams), { visuals: PD.MultiSelect(['molecular-surface-mesh'], PD.objectToOptions(MolecularSurfaceVisuals)), bumpFrequency: PD.Numeric(1, { min: 0, max: 10, step: 0.1 }, BaseGeometry.ShadingCategory) });
+export function getMolecularSurfaceParams(ctx, structure) {
+    return MolecularSurfaceParams;
+}
+export function MolecularSurfaceRepresentation(ctx, getParams) {
+    return Representation.createMulti('Molecular Surface', ctx, getParams, StructureRepresentationStateBuilder, MolecularSurfaceVisuals);
+}
+export var MolecularSurfaceRepresentationProvider = StructureRepresentationProvider({
+    name: 'molecular-surface',
+    label: 'Molecular Surface',
+    description: 'Displays a molecular surface.',
+    factory: MolecularSurfaceRepresentation,
+    getParams: getMolecularSurfaceParams,
+    defaultValues: PD.getDefaultValues(MolecularSurfaceParams),
+    defaultColorTheme: { name: 'chain-id' },
+    defaultSizeTheme: { name: 'physical' },
+    isApplicable: function (structure) { return structure.elementCount > 0; }
+});

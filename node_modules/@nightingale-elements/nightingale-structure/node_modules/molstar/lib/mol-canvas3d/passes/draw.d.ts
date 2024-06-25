@@ -1,0 +1,59 @@
+/**
+ * Copyright (c) 2019-2023 mol* contributors, licensed under MIT, See LICENSE file for more info.
+ *
+ * @author Alexander Rose <alexander.rose@weirdbyte.de>
+ * @author Áron Samuel Kovács <aron.kovacs@mail.muni.cz>
+ * @author Gianluca Tomasello <giagitom@gmail.com>
+ */
+import { WebGLContext } from '../../mol-gl/webgl/context';
+import { RenderTarget } from '../../mol-gl/webgl/render-target';
+import { Renderer } from '../../mol-gl/renderer';
+import { Scene } from '../../mol-gl/scene';
+import { Texture } from '../../mol-gl/webgl/texture';
+import { Camera } from '../camera';
+import { Helper } from '../helper/helper';
+import { StereoCamera } from '../camera/stereo';
+import { PostprocessingPass, PostprocessingProps } from './postprocessing';
+import { MarkingProps } from './marking';
+import { AssetManager } from '../../mol-util/assets';
+type Props = {
+    postprocessing: PostprocessingProps;
+    marking: MarkingProps;
+    transparentBackground: boolean;
+    dpoitIterations: number;
+};
+type RenderContext = {
+    renderer: Renderer;
+    camera: Camera | StereoCamera;
+    scene: Scene;
+    helper: Helper;
+};
+export declare class DrawPass {
+    private webgl;
+    private readonly drawTarget;
+    readonly colorTarget: RenderTarget;
+    readonly depthTextureTransparent: Texture;
+    readonly depthTextureOpaque: Texture;
+    readonly packedDepth: boolean;
+    private depthTargetTransparent;
+    private depthTargetOpaque;
+    private copyFboTarget;
+    private copyFboPostprocessing;
+    private readonly wboit;
+    private readonly dpoit;
+    private readonly marking;
+    readonly postprocessing: PostprocessingPass;
+    private readonly antialiasing;
+    get wboitEnabled(): boolean;
+    get dpoitEnabled(): boolean;
+    constructor(webgl: WebGLContext, assetManager: AssetManager, width: number, height: number, enableWboit: boolean, enableDpoit: boolean);
+    reset(): void;
+    setSize(width: number, height: number): void;
+    private _renderDpoit;
+    private _renderWboit;
+    private _renderBlended;
+    private _render;
+    render(ctx: RenderContext, props: Props, toDrawingBuffer: boolean): void;
+    getColorTarget(postprocessingProps: PostprocessingProps): RenderTarget;
+}
+export {};
