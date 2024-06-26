@@ -1,10 +1,20 @@
-import pandas as pd
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from zipfile import ZipFile
 import io
 from js import fetch
+import pandas as pd
+from pyweb import pydom
+from pyodide.http import open_url
+from pyscript import display
+from js import console
+
+
+clinvar = 'https://raw.githubusercontent.com/suncycles/esm-portal/main/public/files/clinvar.csv.gz'
+iso = 'https://raw.githubusercontent.com/suncycles/esm-portal/main/public/files/isoform-list.csv'
+llr = 'https://huggingface.co/spaces/ntranoslab/esm_variants/raw/main/ALL_hum_isoforms_ESM1b_LLR.zip'
 
 async def load_csv(url):
     response = await fetch(url)
@@ -19,12 +29,16 @@ async def load_llr_csv_from_zip(zip_url, uniprot_id):
             return pd.read_csv(file, index_col=0)
 
 async def main():
-    LLR_FILE_URL = './files/ALL_hum_isoforms_ESM1b_LLR.zip'
-    ISOFORM_LIST_URL = './files/isoform_list.csv'
-    CLINVAR_URL = './files/clinvar.csv.gz'
+    LLR_FILE_URL = llr
+    ISOFORM_LIST_URL = iso
+    CLINVAR_URL = clinvar
 
     df = await load_csv(ISOFORM_LIST_URL)
     clinvar = await load_csv(CLINVAR_URL)
+    pydom["div#pandas-output"].style["display"] = "block"
+    pydom["div#pandas-dev-console"].style["display"] = "block"
+
+    display(df, target="pandas-output-inner", append="False")
     
     def meltLLR(LLR, gene_prefix=None, ignore_pos=False):
         vars = LLR.melt(ignore_index=False)
