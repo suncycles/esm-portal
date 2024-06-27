@@ -13,8 +13,8 @@ from js import console
 
 
 clinvar = 'https://raw.githubusercontent.com/suncycles/esm-portal/main/public/files/clinvar.csv.gz'
-iso = 'https://raw.githubusercontent.com/suncycles/esm-portal/main/public/files/isoform-list.csv'
-llr = 'https://huggingface.co/spaces/ntranoslab/esm_variants/raw/main/ALL_hum_isoforms_ESM1b_LLR.zip'
+iso = 'https://media.githubusercontent.com/media/suncycles/esm-portal/main/public/files/isoform_list.csv'
+llr = './files/ALL_hum_isoforms_ESM1b_LLR.zip'
 
 async def load_csv(url):
     response = await fetch(url)
@@ -33,12 +33,11 @@ async def main():
     ISOFORM_LIST_URL = iso
     CLINVAR_URL = clinvar
 
-    df = await load_csv(ISOFORM_LIST_URL)
-    clinvar = await load_csv(CLINVAR_URL)
-    pydom["div#pandas-output"].style["display"] = "block"
-    pydom["div#pandas-dev-console"].style["display"] = "block"
+    #df = await load_csv(ISOFORM_LIST_URL) #stores isoform_list.csv
+    clinvar = await load_csv(CLINVAR_URL) #stores clinvar.csv.gz
+    df = pd.read_csv(open_url(CLINVAR_URL))
+    display(df, target="pydisplay", append="False")
 
-    display(df, target="pandas-output-inner", append="False")
     
     def meltLLR(LLR, gene_prefix=None, ignore_pos=False):
         vars = LLR.melt(ignore_index=False)
@@ -80,9 +79,3 @@ async def main():
                         ax.plot(i, j, 'ro', markersize=8)  # red circle for pathogenic
         
         plt.show()
-
-    selection = 'P01116'  # Replace with the desired selection
-    uid = 'P01116'  # Replace with the desired UID
-    show_clinvar = False
-
-    await plot_interactive(uid, show_clinvar=show_clinvar)
