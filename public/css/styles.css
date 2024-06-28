@@ -147,3 +147,7 @@ h1 {
   .show {
     display: block;
   }
+  
+  .pydisplay {
+    padding-left:-20;
+  }

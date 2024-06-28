@@ -92,14 +92,15 @@ function updateViewer(inputValue) {
   document.addEventListener('PDB.molstar.mouseover', (e) => {
 
     console.log('Moused over at' + e.eventData.residueNumber);
-    //idk which one is the 
-    //console.log(e.eventData.auth_seq_id);
+    sessionStorage.setItem("pos", toString(e.eventData.residueNumber))
     //log the residue number as it's moused over
-    //next, sync a tracker bar with heat map
 });
 
   document.addEventListener('PDB.molstar.click', (e) => { 
     //on click, let the tracker bar lock onto postion
-      console.log('Clicked at' + e.eventData.residueNumber)
+    // maybe some zoom in feature on click?
+    console.log('Clicked at' + e.eventData.residueNumber)
+    sessionStorage.setItem("lockPos", toString(e.eventData.residueNumber))
+
   });
 }
