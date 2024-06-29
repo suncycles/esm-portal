@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="https://pyscript.net/releases/2024.6.1/core.css">
     <script type="module" src="https://pyscript.net/releases/2024.6.1/core.js"></script>
     <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
     <link rel="stylesheet" href="./css/styles.css">
 </head>
 <h1>
@@ -78,10 +79,10 @@
         }
         }
     </script>
-    <!--PyScript (if performance suffers too much then translate to js)-->   
-    <div id="pydisplay">  
-        <script type="py" src="./py/esm-variants.py" config="./py/pyscript.json"></script>  
-    </div>
+    <!-- plotly -->
+    <div id = 'MYPLOT' style="width: 480px; height: 400px;"></div>
+    <script src="./js/esm-variants.js"></script>
+    
 </body>
 
 
