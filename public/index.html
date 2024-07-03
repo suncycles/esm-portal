@@ -79,9 +79,14 @@
         }
         }
     </script>
+    <!--<script type="py" src = './py/esm-variants.py' config = './py/pyscript.json'></script>-->
+    
     <!-- plotly -->
-    <div id = 'MYPLOT' style="width: 480px; height: 400px;"></div>
-    <script src="./js/esm-variants.js"></script>
+    <div id = 'heatmap'>
+        <input type="text" id="residueSearch" placeholder="Search position..." onkeyup="searchPosition(this); highlightPosition(this)">
+        <div id = 'MYPLOT' style="width: 1400px; height: 600px;"></div>
+        <script src="./js/esm-variants.js"></script>
+    </div>
     
 </body>
 

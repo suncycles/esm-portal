@@ -148,6 +148,6 @@ h1 {
     display: block;
   }
   
-  .pydisplay {
-    padding-left:-20;
+  .heatmap {
+    width: 10vw;
   }

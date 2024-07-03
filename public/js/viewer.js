@@ -90,17 +90,23 @@ function updateViewer(inputValue) {
   viewerInstance.render(viewerContainer, options);
 
   document.addEventListener('PDB.molstar.mouseover', (e) => {
-
+    var inputElement = document.createElement('input');
+    inputElement.type = 'text';
+    inputElement.value = e.eventData.residueNumber;
     console.log('Moused over at' + e.eventData.residueNumber);
-    sessionStorage.setItem("pos", toString(e.eventData.residueNumber))
+    highlightPosition(inputElement);
     //log the residue number as it's moused over
 });
 
   document.addEventListener('PDB.molstar.click', (e) => { 
     //on click, let the tracker bar lock onto postion
     // maybe some zoom in feature on click?
+    // onclick show table and other info about scores and stuff
+    var inputElement = document.createElement('input');
+    inputElement.type = 'text';
+    inputElement.value = e.eventData.residueNumber;
     console.log('Clicked at' + e.eventData.residueNumber)
-    sessionStorage.setItem("lockPos", toString(e.eventData.residueNumber))
-
+    searchPosition(inputElement);
+    highlightPosition(inputElement);
   });
 }
