@@ -81,7 +81,7 @@ fetch("./files/uniprotkb_Human_AND_reviewed_true_AND_m_2024_06_18.tsv")
         }
     });
     
-    console.log(firstColumnArray); 
+    //console.log(firstColumnArray); 
     autocomplete(document.getElementById("inputString"), firstColumnArray);
 })
   .catch((e) => console.error(e));

@@ -17,13 +17,20 @@ h1 {
     text-align: left; 
     
 }
-
+.grid-parent {
+  display: grid;
+  grid-template-columns: 1fr 1fr
+}
+#tracks {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+}
 #myViewer {
-    float: left;
-    width: 80vw;
+    width: 50vw;
     height: 35vw;
     position: relative;
     margin: 20px;
+    
   }
 * {
     box-sizing: border-box;
@@ -150,4 +157,18 @@ h1 {
   
   .heatmap {
     width: 10vw;
+  }
+  td {
+    padding: 5px;
+  }
+  td:first-child {
+    background-color: lightcyan;
+    font: 0.8em sans-serif;
+    white-space: nowrap;
+  }
+  td:nth-child(2) {
+    background-color: aliceblue;
+  }
+  tr:nth-child(-n + 3) > td {
+    background-color: transparent;
   }

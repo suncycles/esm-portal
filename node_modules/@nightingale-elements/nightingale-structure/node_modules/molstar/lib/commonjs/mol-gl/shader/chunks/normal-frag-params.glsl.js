@@ -1,4 +1,0 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.normal_frag_params = void 0;
-exports.normal_frag_params = "\nvarying vec3 vNormal;\n";

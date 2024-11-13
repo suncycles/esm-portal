@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!---->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+      ESM PORTAL
+    </title>
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://cdn.jsdelivr.net/npm/pdbe-molstar@3.2.0/build/pdbe-molstar.css"
+    />
+
+    <script src="https://cdn.plot.ly/plotly-2.33.0.min.js" charset="utf-8"></script>
+    <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+    <link rel="stylesheet" href="./css/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/chroma-js@3.0.0/dist/chroma.min.cjs"></script>
+    <script src = "./js/g2p-request.js"></script>
+    <script src="./js/queryForm.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/pdbe-molstar@3.2.0/build/pdbe-molstar-plugin.js"></script>
+    <script type ="module" src="./js/viewer.js">//Viewer functions and rendering</script>
+    <script type ="module" src="./js/tracks.js"></script>
+    <script type ="module" src="./js/esm-variants/esm-variants.js"></script>   
+    <script type ="module" src="./js/esm-variants/event-manager.js"></script>   
+    <script type ="module" src="./js/esm-variants/plotly-manager.js"></script>  
+    <script type ="module" src="./js/esm-variants/data-process.js"></script>   
+ 
+
+    <script src="./js/custom-coloring.js"></script> 
+    
+</head>
+<h1>
+    <div class="navbar">
+        <a href="home.html">Home</a>
+        <a href="viewer.html">Viewer</a>
+        <div class="dropdown">
+          <button class="dropbtn" onclick="drop()"> About
+          <i class="fa fa-caret-down"></i>
+          </button>
+          <div class="dropdown-content" id="myDropdown">
+            <a href="research.html">Some info about the paper and research</a>
+            <a href="credits.html">Citations?</a>
+          </div>
+        </div> 
+    </div>
+      
+</h1>
+    
+
+<body>
+    <!--Nav Bar-->
+    <script>
+        function drop() {
+        document.getElementById("myDropdown").classList.toggle("show");
+        }
+        
+        // Close the dropdown if the user clicks outside of it
+        window.onclick = function(e) {
+        if (!e.target.matches('.dropbtn')) {
+        var myDropdown = document.getElementById("myDropdown");
+            if (myDropdown.classList.contains('show')) {
+            myDropdown.classList.remove('show');
+            }
+        }
+        }
+    </script>
+    
+    
+    <!--Search bar widget-->
+    <form id = "queryForm" autocomplete="off">
+        <div class="autocomplete" style="width:300px;">
+          <input id="inputString" type="text" name="id" placeholder="Enter UniProt ID">
+        </div>
+        <input type="submit" value="View">
+        <h2>
+            Sequence and Feature Viewer
+        </h2>
+      </form>
+      <div class = 'parent grid-parent'>
+        <div id = "tracks" class = 'child'>
+        </div>
+  
+        <div class = 'child'> 
+          <!--Mol* viewer widget-->
+          <div id="myViewer"></div>
+          
+         <button id="hydrophobicityBtn" type="button">Hydrophobicity</button>
+         <button id="accessibleSurfaceBtn" type="button">Accessible Surface Area</button>
+         <button id="secondaryStructBtn" type="button">Secondary Structure</button>
+         <button id="confidenceBtn" type="button">AF Confidence</button>
+         <button id="customColorBtn" type="button">Score</button>
+         <button id="molecularRepBtn" type="button">Molecular Representation</button>
+         <script type = "module">
+          import { colorHydrophobicity, colorAccessible, colorSecondaryStruct, colorConfidence, colorCustom, loadMoleculeRepresentation } from './js/viewer.js';
+
+          document.getElementById('hydrophobicityBtn').addEventListener('click', () => {
+            colorHydrophobicity();
+          });
+
+          // Accessible Surface Area button
+          document.getElementById('accessibleSurfaceBtn').addEventListener('click', () => {
+            colorAccessible();
+          });
+
+          // Secondary Structure button
+          document.getElementById('secondaryStructBtn').addEventListener('click', () => {
+            colorSecondaryStruct();
+          });
+
+          // AF Confidence button
+          document.getElementById('confidenceBtn').addEventListener('click', () => {
+            colorConfidence();
+          });
+
+          // Custom Score button
+          document.getElementById('customColorBtn').addEventListener('click', () => {
+            colorCustom();
+          });
+
+          // Molecular Representation button
+          document.getElementById('molecularRepBtn').addEventListener('click', () => {
+            loadMoleculeRepresentation();
+          });
+
+
+        </script>
+         
+            
+            <script type = "module">
+                import {createTracks} from "./js/tracks.js";
+                import {updateViewer} from "./js/viewer.js"
+                document.getElementById('queryForm').addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const inputValue = document.getElementById('inputString').value;
+                    updateViewer(inputValue);
+                    createTracks(inputValue);
+                });
+                
+            </script>
+        </div>
+      </div>
+      
+
+    <!-- HEATMAP -->
+    <div class = 'heatmap'> 
+        <input type="text" id="residueSearch" placeholder="Search position..." onkeyup="searchPosition(this); highlightPosition(this)">
+        <div id = 'MYPLOT' style="width: 1400px; height: 600px;"></div>
+    </div>
+    
+</body>
+
+
+</html>
